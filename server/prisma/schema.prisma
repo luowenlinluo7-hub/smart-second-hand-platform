@@ -1,0 +1,252 @@
+// ============================================================
+// 智能二手交易平台 · Prisma Schema
+// 数据库：PostgreSQL 15+（Supabase 兼容）
+// 约定：
+//   1) 金额统一使用 Decimal(10, 2)，禁止用 Float 存钱
+//   2) 商品图片使用 String[]（PostgreSQL 原生数组；MySQL 不支持标量列表）
+//   3) 每张表都有 id / createdAt / updatedAt / status / 外键
+//   4) 所有查询必须走 Prisma Client，禁止拼接 SQL
+// 首次迁移：npx prisma migrate dev --name init
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================ 枚举 ============================
+
+// 用户角色：普通用户 / 卖家 / 管理员
+enum UserRole {
+  USER
+  SELLER
+  ADMIN
+}
+
+// 用户状态
+enum UserStatus {
+  ACTIVE // 正常
+  BANNED // 封禁
+}
+
+// 分类状态
+enum CategoryStatus {
+  ENABLED // 启用
+  DISABLED // 停用
+}
+
+// 商品状态
+enum ProductStatus {
+  DRAFT // 草稿
+  PENDING_REVIEW // 待审核
+  ON_SALE // 在售
+  SOLD // 已售出
+  OFF_SHELF // 已下架
+  REJECTED // 审核驳回
+}
+
+// 商品成色
+enum ProductCondition {
+  NEW // 全新
+  LIKE_NEW // 几乎全新
+  GOOD // 轻微使用痕迹
+  FAIR // 明显使用痕迹
+}
+
+// 订单状态（核心状态机）
+// 待付款 -> 待发货 -> 已发货 -> 已完成 -> 已评价
+// 待付款 / 待发货 阶段可取消 -> 已取消
+enum OrderStatus {
+  PENDING_PAYMENT // 待付款
+  PENDING_SHIPMENT // 待发货
+  SHIPPED // 已发货
+  COMPLETED // 已完成
+  REVIEWED // 已评价
+  CANCELLED // 已取消
+}
+
+// 订单行状态：支持一个订单内多商品分行履约
+enum OrderItemStatus {
+  PENDING // 待发货
+  SHIPPED // 已发货
+  COMPLETED // 已完成
+  CANCELLED // 已取消
+}
+
+// 评价状态：管理员可隐藏违规评价
+enum ReviewStatus {
+  VISIBLE // 可见
+  HIDDEN // 已隐藏
+}
+
+// ============================ 用户 ============================
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  email        String     @unique
+  phone        String?    @unique
+  passwordHash String // bcryptjs 加密结果，禁止返回给前端
+  nickname     String?
+  avatar       String?
+  role         UserRole   @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // 关系
+  products        Product[] @relation("ProductSeller") // 我发布的商品
+  buyerOrders     Order[]   @relation("OrderBuyer") // 我作为买家的订单
+  writtenReviews  Review[]  @relation("ReviewReviewer") // 我写出的评价
+  receivedReviews Review[]  @relation("ReviewReviewee") // 我收到的评价
+
+  @@index([role]) // 管理员按角色筛选
+  @@index([status]) // 封禁列表
+  @@index([createdAt]) // 用户增长趋势（数据看板）
+  @@map("users")
+}
+
+// ============================ 分类 ============================
+
+model Category {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  slug      String         @unique // 英文别名，用于前端路由 / SEO
+  icon      String?
+  sortOrder Int            @default(0)
+  status    CategoryStatus @default(ENABLED)
+  parentId  String? // 自关联，支持二级分类
+  parent    Category?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]     @relation("CategoryTree")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  products Product[]
+
+  @@index([parentId]) // 查询子分类
+  @@index([status, sortOrder]) // 前台按排序取启用分类
+  @@map("categories")
+}
+
+// ============================ 商品 ============================
+
+model Product {
+  id            String           @id @default(cuid())
+  title         String
+  description   String?          @db.Text
+  price         Decimal          @db.Decimal(10, 2) // 售价（Decimal，禁止 Float）
+  originalPrice Decimal?         @db.Decimal(10, 2) // 原价，用于展示折扣
+  images        String[] // 商品图片 URL 列表
+  condition     ProductCondition @default(GOOD) // 成色
+  status        ProductStatus    @default(PENDING_REVIEW) // 状态
+  stock         Int              @default(1) // 二手商品默认 1 件
+  viewCount     Int              @default(0) // 浏览量（看板用）
+  favoriteCount Int              @default(0) // 收藏量（看板用）
+  rejectReason  String? // 审核驳回原因
+  publishedAt   DateTime? // 上架时间
+  sellerId      String
+  seller        User             @relation("ProductSeller", fields: [sellerId], references: [id])
+  categoryId    String
+  category      Category         @relation(fields: [categoryId], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  orderItems OrderItem[]
+  reviews    Review[]
+
+  @@index([sellerId]) // 卖家商品列表
+  @@index([categoryId]) // 分类筛选
+  @@index([status, createdAt]) // 首页在售商品按时间倒序（覆盖索引）
+  @@index([status, price]) // 在售商品价格排序 / 区间筛选
+  @@index([status, viewCount]) // 热门商品榜
+  @@index([title]) // 标题前缀筛选（模糊搜索另建 pg_trgm GIN 索引）
+  @@map("products")
+}
+
+// ============================ 订单 ============================
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNo         String      @unique // 对外订单号，不暴露内部 id
+  buyerId         String
+  buyer           User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  totalAmount     Decimal     @db.Decimal(10, 2) // 订单总额 = 所有 OrderItem.subtotal 之和
+  status          OrderStatus @default(PENDING_PAYMENT)
+  receiverName    String // 收货人
+  receiverPhone   String
+  receiverAddress String
+  remark          String? // 买家备注
+  // 状态流转时间戳，用于数据看板计算履约时长
+  paidAt          DateTime?
+  shippedAt       DateTime?
+  completedAt     DateTime?
+  reviewedAt      DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items   OrderItem[]
+  reviews Review[]
+
+  @@index([buyerId, status]) // 买家「我的订单」按状态筛选
+  @@index([status, createdAt]) // 卖家 / 管理员待处理订单
+  @@index([createdAt]) // 看板按日期聚合 GMV
+  @@map("orders")
+}
+
+// ============================ 订单项 ============================
+
+// 订单与商品通过 OrderItem 关联（多对多拆解 + 下单快照）
+model OrderItem {
+  id        String          @id @default(cuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id])
+  // 下单快照：商品后续改价 / 下架不影响历史订单
+  title     String
+  image     String?
+  price     Decimal         @db.Decimal(10, 2) // 成交单价
+  quantity  Int             @default(1)
+  subtotal  Decimal         @db.Decimal(10, 2) // price * quantity，写入时计算，便于聚合统计
+  status    OrderItemStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([orderId, productId]) // 同一订单内同一商品只允许一行
+  @@index([orderId]) // 订单详情
+  @@index([productId]) // 商品销量统计
+  @@index([status]) // 分行履约
+  @@map("order_items")
+}
+
+// ============================ 评价 ============================
+
+model Review {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id])
+  reviewerId String // 评价人（买家）
+  reviewer   User         @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+  revieweeId String // 被评价人（卖家）
+  reviewee   User         @relation("ReviewReviewee", fields: [revieweeId], references: [id])
+  rating     Int // 评分 1-5（业务层用 zod 校验范围）
+  content    String?      @db.Text
+  images     String[] // 评价晒图
+  status     ReviewStatus @default(VISIBLE)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([orderId, productId, reviewerId]) // 同一订单同一商品只能评价一次
+  @@index([productId, status]) // 商品详情页展示评价
+  @@index([revieweeId, status]) // 卖家信誉分
+  @@index([reviewerId]) // 我发出的评价
+  @@index([createdAt])
+  @@map("reviews")
+}

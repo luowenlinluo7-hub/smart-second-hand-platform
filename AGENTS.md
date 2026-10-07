@@ -5,9 +5,9 @@
 
 ## 技术栈
 前端：Vue3 + TypeScript + Vite + Pinia + Vue Router + Element Plus + ECharts + Axios
-后端：Node.js + Express + TypeScript + Prisma + MySQL + JWT + zod + bcryptjs
+后端：Node.js + Express + TypeScript + Prisma + PostgreSQL + JWT + zod + bcryptjs
 AI：后端调用 DeepSeek-V4.1-Flash，自然语言转 JSON 查询条件
-部署：前端 Vercel/Netlify，后端 Railway/Render/云服务器 + PM2 + Nginx，数据库 Supabase/MySQL
+部署：前端 Vercel/Netlify，后端 Railway/Render/云服务器 + PM2 + Nginx，数据库 Supabase(PostgreSQL)
 版本：GitHub 主仓库，Gitee 镜像
 
 ## 目录约定
@@ -22,6 +22,7 @@ server/src/middleware/   中间件
 server/src/services/     业务服务
 server/src/utils/        工具
 server/prisma/           Prisma schema
+server/docs/             数据库与 API 契约文档
 
 ## 不可违反
 1. 前端只用 `<script setup lang="ts">`，禁止 any。
