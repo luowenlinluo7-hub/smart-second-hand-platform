@@ -22,3 +22,5 @@ Thumbs.db
 *.db
 # 涓婁紶鏂囦欢
 uploads/
+# 临时提交信息文件
+commit_msg_temp.txt
