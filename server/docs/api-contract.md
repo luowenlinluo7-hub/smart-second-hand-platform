@@ -1,22 +1,24 @@
 # 智能二手交易平台 · 数据库 & API 契约
 
-> 版本 `v1` ｜ 数据库 **PostgreSQL 15+** ｜ API 前缀 `/api/v1` ｜ Schema 位置 [`server/prisma/schema.prisma`](../prisma/schema.prisma)
+> 版本 `v1` ｜ 数据库 **MySQL 8.0+** ｜ API 前缀 `/api/v1` ｜ Schema 位置 [`server/prisma/schema.prisma`](../prisma/schema.prisma)
 
 ---
 
 ## 一、选型说明（必读）
 
-原技术栈写的是 MySQL，但 **Prisma 的标量列表（`String[]`）在 MySQL 上不被支持**，已用 Prisma 6.19.3 实测：
+数据库采用 **MySQL 8.0+**。
+
+Prisma 的标量列表（`String[]`）**在 MySQL 上不被支持**，已用 Prisma 6.19.3 实测：
 
 ```text
 error: Field "images" in model "Product" can't be a list.
        The current connector does not support lists of primitive types.
 ```
 
-同一份 schema 换成 `provider = "postgresql"` 后校验通过（`String[]` → `TEXT[]`）。
-又因部署目标中的 **Supabase 本身就是 PostgreSQL**，故数据库统一采用 **PostgreSQL**。
+因此商品图片与评价晒图改用 **`Json`** 存字符串数组：`Product.images Json`、`Review.images Json`。
+写入时直接传 JS 数组，读出即为数组 —— **API 契约与前端 `string[]` 类型均无需改动**。
 
-> 若必须用 MySQL：把 `images String[]` 改成 `images Json`（Prisma 支持），其余模型无需改动。
+> 若改用 PostgreSQL，可把这两处 `Json` 换回 `String[]`（原生数组），其余模型无需改动。
 
 ---
 
@@ -140,6 +142,20 @@ erDiagram
 ```jsonc
 { "list": [], "total": 128, "page": 1, "pageSize": 20 }
 ```
+
+**金额字段的序列化约定（已实测确认）**
+
+Prisma 的 `Decimal` 在 JSON 序列化时会**归一化掉尾随零**，直接返回会得到 `"1899"` 而不是 `"1899.00"`：
+
+```js
+price.toString()        // "1899"      ← 尾随零丢失，仅是显示问题
+price.toFixed(2)        // "1899.00"   ← 正确写法
+JSON.stringify(price)   // "1899"
+```
+
+精度本身安全（实测写入 `"1899.55"` 可精确往返，聚合求和也无浮点误差），
+但**所有出参中的金额字段必须在序列化前调用 `.toFixed(2)`**，
+否则前端拿到的 `1899` 与本契约示例不符，金额展示不统一。
 
 ---
 
@@ -283,17 +299,14 @@ erDiagram
 AI 搜索的关键词模糊匹配请不要用 `LIKE '%x%'`（无法走索引）。商品量上万后执行：
 
 ```sql
--- 创建扩展
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
--- 标题三元组索引，支持相似度 / 模糊匹配
-CREATE INDEX IF NOT EXISTS products_title_trgm_idx
-  ON products USING GIN (title gin_trgm_ops);
-
--- 中文全文检索可选：to_tsvector + GIN
-CREATE INDEX IF NOT EXISTS products_search_idx
-  ON products USING GIN (to_tsvector('simple', title || ' ' || coalesce(description, '')));
+-- MySQL 全文索引：ngram 分词器专门用于中文（MySQL 5.7.6+ 内置）
+ALTER TABLE products
+  ADD FULLTEXT INDEX products_title_desc_ft (title, description) WITH PARSER ngram;
 ```
+
+查询改写为 `MATCH(title, description) AGAINST ('iPhone' IN BOOLEAN MODE)`。
+注意 MySQL 全文索引的 `ngram_token_size` 默认是 2，即**不会匹配单字关键词**；
+中文场景通常够用，若需单字检索须在建库时调小该参数（需重建索引）。
 
 放置位置：`server/prisma/migrations/<时间戳>_add_search_index/migration.sql`（迁移创建后手工追加以保持可追溯）。
 
@@ -440,18 +453,20 @@ curl -X POST "http://localhost:3000/api/v1/orders" \
 ```bash
 # 1) 进入后端目录并安装依赖（Prisma 固定 6.x，latest 目前指向 8.0.0-rc 不建议）
 cd server
-npm init -y
 npm i @prisma/client@^6
-npm i -D prisma@^6 typescript tsx @types/node
+npm i -D prisma@^6 typescript tsx nodemon @types/node
 
-# 2) 配置 .env（复制根目录 .env.example）
-#    DATABASE_URL="postgresql://postgres:密码@localhost:5432/smart_second_hand?schema=public"
+# 2) 配置 .env（复制根目录 .env.example，填入本机 MySQL 密码）
+#    DATABASE_URL="mysql://root:密码@localhost:3306/smart_second_hand"
 
 # 3) 生成 client + 执行首次迁移
 npx prisma generate
 npx prisma migrate dev --name init
 
-# 4) 可视化查看数据
+# 4) 灌入演示数据（幂等，可重复执行）
+npm run seed
+
+# 5) 可视化查看数据
 npx prisma studio
 ```
 

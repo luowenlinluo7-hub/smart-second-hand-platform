@@ -1,9 +1,10 @@
 // ============================================================
 // 智能二手交易平台 · Prisma Schema
-// 数据库：PostgreSQL 15+（Supabase 兼容）
+// 数据库：MySQL 8.0+
 // 约定：
 //   1) 金额统一使用 Decimal(10, 2)，禁止用 Float 存钱
-//   2) 商品图片使用 String[]（PostgreSQL 原生数组；MySQL 不支持标量列表）
+//   2) 商品图片 / 评价晒图使用 Json 数组
+//      （MySQL 不支持 Prisma 的 String[] 标量列表，改用 Json 存字符串数组）
 //   3) 每张表都有 id / createdAt / updatedAt / status / 外键
 //   4) 所有查询必须走 Prisma Client，禁止拼接 SQL
 // 首次迁移：npx prisma migrate dev --name init
@@ -14,7 +15,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -140,7 +141,7 @@ model Product {
   description   String?          @db.Text
   price         Decimal          @db.Decimal(10, 2) // 售价（Decimal，禁止 Float）
   originalPrice Decimal?         @db.Decimal(10, 2) // 原价，用于展示折扣
-  images        String[] // 商品图片 URL 列表
+  images        Json // 商品图片 URL 列表（字符串数组）
   condition     ProductCondition @default(GOOD) // 成色
   status        ProductStatus    @default(PENDING_REVIEW) // 状态
   stock         Int              @default(1) // 二手商品默认 1 件
@@ -238,7 +239,7 @@ model Review {
   reviewee   User         @relation("ReviewReviewee", fields: [revieweeId], references: [id])
   rating     Int // 评分 1-5（业务层用 zod 校验范围）
   content    String?      @db.Text
-  images     String[] // 评价晒图
+  images     Json // 评价晒图（字符串数组）
   status     ReviewStatus @default(VISIBLE)
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
