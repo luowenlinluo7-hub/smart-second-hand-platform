@@ -1,0 +1,19 @@
+任务：为智能二手交易平台设计数据库与 API 契约。
+
+角色：普通用户、卖家、管理员。
+核心模块：用户、商品、交易、AI搜索、数据看板、管理员。
+
+请输出：
+1. 数据库 E-R 说明。
+2. Prisma schema，包含 User、Product、Category、Order、OrderItem、Review。
+3. 字段：id、createdAt、updatedAt、状态字段、外键。
+4. 订单状态：待付款、待发货、已发货、已完成、已评价。
+5. RESTful API 列表：方法、路径、鉴权、请求参数、响应结构。
+6. 给出 3 个 curl 示例。
+
+约束：
+- 金额用 Decimal。
+- 商品图片用 String[]。
+- 订单与商品用 OrderItem 关联。
+- 所有表加索引建议。
+验收：我能直接复制 schema 到 server/prisma/schema.prisma 并运行迁移。
