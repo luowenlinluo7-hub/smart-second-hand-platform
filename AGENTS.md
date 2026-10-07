@@ -5,9 +5,9 @@
 
 ## 技术栈
 前端：Vue3 + TypeScript + Vite + Pinia + Vue Router + Element Plus + ECharts + Axios
-后端：Node.js + Express + TypeScript + Prisma + PostgreSQL + JWT + zod + bcryptjs
+后端：Node.js + Express + TypeScript + Prisma + MySQL + JWT + zod + bcryptjs
 AI：后端调用 DeepSeek-V4.1-Flash，自然语言转 JSON 查询条件
-部署：前端 Vercel/Netlify，后端 Railway/Render/云服务器 + PM2 + Nginx，数据库 Supabase(PostgreSQL)
+部署：前端 Vercel/Netlify，后端 Railway/Render/云服务器 + PM2 + Nginx，数据库 MySQL
 版本：GitHub 主仓库，Gitee 镜像
 
 ## 目录约定
