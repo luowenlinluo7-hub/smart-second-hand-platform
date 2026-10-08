@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { success } from '../utils/response';
+import adminRouter from './admin';
 import authRouter from './auth';
 import categoryRouter from './category';
 import productRouter from './product';
@@ -28,5 +29,7 @@ router.use('/categories', categoryRouter);
 router.use('/products', productRouter);
 // 图片上传
 router.use('/upload', uploadRouter);
+// 管理员
+router.use('/admin', adminRouter);
 
 export default router;

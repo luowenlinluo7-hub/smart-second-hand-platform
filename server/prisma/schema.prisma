@@ -164,7 +164,7 @@ model Product {
   @@index([status, createdAt]) // 首页在售商品按时间倒序（覆盖索引）
   @@index([status, price]) // 在售商品价格排序 / 区间筛选
   @@index([status, viewCount]) // 热门商品榜
-  @@index([title]) // 标题前缀筛选（模糊搜索另建 pg_trgm GIN 索引）
+  @@index([title]) // 标题前缀筛选（模糊搜索另见 docs：MySQL ngram 全文索引）
   @@map("products")
 }
 

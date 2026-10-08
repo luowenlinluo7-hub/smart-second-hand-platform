@@ -54,6 +54,15 @@ const listQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// 我的商品：status 不传返回全部状态，由前端 Tab 切换
+const myListQuerySchema = z.object({
+  status: z
+    .enum(['DRAFT', 'PENDING_REVIEW', 'ON_SALE', 'SOLD', 'OFF_SHELF', 'REJECTED'])
+    .optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 // ---------- 控制器 ----------
 
 // GET /api/products
@@ -65,6 +74,19 @@ export const list = async (req: Request, res: Response): Promise<void> => {
     priceMin: query.priceMin,
     priceMax: query.priceMax,
     keyword: query.keyword,
+    page: query.page,
+    pageSize: query.pageSize,
+  });
+  res.json(success(result));
+};
+
+// GET /api/products/mine（需登录，返回当前用户发布的全部状态商品）
+// 注意：该路由必须注册在 /:id 之前，否则 mine 会被当作商品 id
+export const mine = async (req: Request, res: Response): Promise<void> => {
+  const query = myListQuerySchema.parse(req.query);
+  const result = await productService.listMyProducts({
+    sellerId: getUserId(req),
+    status: query.status,
     page: query.page,
     pageSize: query.pageSize,
   });
@@ -91,7 +113,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     categoryId: input.categoryId,
     stock: input.stock,
   });
-  res.status(201).json(success(product, '发布成功'));
+  res.status(201).json(success(product, '发布成功，等待管理员审核'));
 };
 
 // PUT /api/products/:id（需本人）
@@ -116,6 +138,13 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
   const userId = getUserId(req);
   await productService.removeProduct(String(req.params.id), userId);
   res.json(success(null, '已下架'));
+};
+
+// POST /api/products/:id/relist（需本人，重新上架进入待审核）
+export const relist = async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req);
+  const product = await productService.relistProduct(String(req.params.id), userId);
+  res.json(success(product, '已重新提交审核'));
 };
 
 function getUserId(req: Request): string {
