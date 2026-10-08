@@ -14,6 +14,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '数据看板' },
   },
   {
+    path: '/products/:id',
+    name: 'product-detail',
+    component: () => import('@/views/ProductDetailView.vue'),
+    meta: { title: '商品详情' },
+  },
+  {
+    path: '/publish',
+    name: 'product-publish',
+    component: () => import('@/views/ProductFormView.vue'),
+    meta: { title: '发布商品', requiresAuth: true },
+  },
+  {
+    path: '/products/:id/edit',
+    name: 'product-edit',
+    component: () => import('@/views/ProductFormView.vue'),
+    meta: { title: '编辑商品', requiresAuth: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),

@@ -42,3 +42,67 @@ export interface AuthResult {
   token: string
   user: User
 }
+
+// 商品成色
+export type ProductCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR'
+
+// 商品状态
+export type ProductStatus =
+  | 'DRAFT'
+  | 'PENDING_REVIEW'
+  | 'ON_SALE'
+  | 'SOLD'
+  | 'OFF_SHELF'
+  | 'REJECTED'
+
+// 商品（含卖家与分类嵌套）
+export interface Product {
+  id: string
+  title: string
+  description: string | null
+  price: string
+  originalPrice: string | null
+  images: string[]
+  condition: ProductCondition
+  status: ProductStatus
+  stock: number
+  viewCount: number
+  favoriteCount: number
+  publishedAt: string | null
+  sellerId: string
+  categoryId: string
+  createdAt: string
+  updatedAt: string
+  seller: {
+    id: string
+    username: string
+    nickname: string | null
+    avatar: string | null
+  }
+  category: {
+    id: string
+    name: string
+    slug: string
+  }
+}
+
+// 商品列表查询参数
+export interface ProductQuery {
+  categoryId?: string
+  condition?: ProductCondition
+  priceMin?: number
+  priceMax?: number
+  keyword?: string
+  page?: number
+  pageSize?: number
+}
+
+// 分类
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  icon: string | null
+  sortOrder: number
+  status: string
+}
