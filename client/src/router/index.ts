@@ -14,6 +14,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '数据看板' },
   },
   {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: '登录' },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { title: '注册' },
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { title: '个人中心', requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue'),
@@ -24,6 +42,21 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+})
+
+// 路由守卫：只读 localStorage 判断登录态，避免与 store 产生循环依赖
+router.beforeEach((to) => {
+  const token = localStorage.getItem('token')
+
+  // 需登录页面未登录 → 跳登录页并记住来源
+  if (to.meta.requiresAuth && !token) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+
+  // 已登录访问登录 / 注册页 → 回首页
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    return { path: '/' }
+  }
 })
 
 router.afterEach((to) => {

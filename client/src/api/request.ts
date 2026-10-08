@@ -27,6 +27,15 @@ instance.interceptors.response.use(
   },
   (error: unknown) => {
     if (axios.isAxiosError(error)) {
+      // 401：会话失效，清除本地 token 与用户信息并跳转登录页
+      // （用整页跳转而非 SPA push，确保 Pinia 状态随页面刷新而重建）
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/login') {
+          window.location.assign('/login')
+        }
+      }
       const body = error.response?.data as ApiResponse<unknown> | undefined
       return Promise.reject(new Error(body?.message ?? error.message))
     }
@@ -46,6 +55,10 @@ export const http = {
   },
   patch: async <T>(url: string, data?: unknown): Promise<T> => {
     const response = await instance.patch<ApiResponse<T>>(url, data)
+    return response.data.data as T
+  },
+  put: async <T>(url: string, data?: unknown): Promise<T> => {
+    const response = await instance.put<ApiResponse<T>>(url, data)
     return response.data.data as T
   },
   delete: async <T>(url: string): Promise<T> => {

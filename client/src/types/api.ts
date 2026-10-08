@@ -20,3 +20,25 @@ export interface PageResult<T> {
   page: number
   pageSize: number
 }
+
+// 用户角色
+export type UserRole = 'USER' | 'SELLER' | 'ADMIN'
+
+// 用户出参（后端已排除 passwordHash）
+export interface User {
+  id: string
+  username: string
+  email: string
+  nickname: string | null
+  avatar: string | null
+  phone: string | null
+  role: UserRole
+  status: string
+  createdAt: string
+}
+
+// 注册 / 登录的返回数据
+export interface AuthResult {
+  token: string
+  user: User
+}
