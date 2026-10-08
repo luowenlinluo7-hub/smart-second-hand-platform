@@ -166,11 +166,12 @@ JSON.stringify(price)   // "1899"
 | POST | `/auth/register` | 公开 | `username` `email` `password` `role?`(`USER`\|`SELLER`) | `{ token, user }` |
 | POST | `/auth/login` | 公开 | `account`(用户名/邮箱) `password` | `{ token, user }` |
 | GET | `/auth/me` | 登录 | — | `user` |
-| PATCH | `/auth/me` | 登录 | `nickname?` `avatar?` `phone?` | `user` |
-| PATCH | `/auth/password` | 登录 | `oldPassword` `newPassword` | `null` |
+| PUT | `/auth/profile` | 登录 | `nickname?` `avatar?` `phone?`（`null` 表示清空） | `user` |
+| PUT | `/auth/password` | 登录 | `oldPassword` `newPassword` | `null` |
 
 > `user` 出参**永远不含 `passwordHash`**（Prisma `select` 白名单）。
 > 密码用 `bcryptjs` 加盐哈希，`JWT_SECRET` 只存在于后端 `.env`。
+> 修改密码成功后需**重新登录**（前端清除本地 token 并跳转登录页）。
 
 ### 4.2 分类 · `/api/v1/categories`
 
@@ -462,7 +463,6 @@ npm i -D prisma@^6 typescript tsx nodemon @types/node
 # 3) 生成 client + 执行首次迁移
 npx prisma generate
 npx prisma migrate dev --name init
-
 # 4) 灌入演示数据（幂等，可重复执行）
 npm run seed
 

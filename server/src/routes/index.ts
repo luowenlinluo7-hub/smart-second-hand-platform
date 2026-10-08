@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { success } from '../utils/response';
+import authRouter from './auth';
 
 // /api 下的路由总入口，后续模块（auth / products / orders ...）都在此挂载
 const router = Router();
@@ -15,5 +16,8 @@ router.get('/health', (_req, res) => {
     }),
   );
 });
+
+// 用户认证
+router.use('/auth', authRouter);
 
 export default router;
