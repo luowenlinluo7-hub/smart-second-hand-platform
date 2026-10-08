@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -6,6 +7,11 @@ import { useAuthStore } from '@/stores/auth'
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const router = useRouter()
+
+// 全局探活：任何页面进入都更新一次后端连通状态，保证导航栏标签准确
+onMounted(() => {
+  appStore.checkOnline()
+})
 
 const handleLogout = (): void => {
   authStore.logout()
@@ -20,6 +26,9 @@ const handleLogout = (): void => {
       <nav class="nav">
         <RouterLink to="/">首页</RouterLink>
         <RouterLink to="/dashboard">数据看板</RouterLink>
+        <RouterLink v-if="authStore.user?.role === 'SELLER' || authStore.user?.role === 'ADMIN'" to="/publish">
+          发布商品
+        </RouterLink>
       </nav>
       <div class="right">
         <el-tag :type="appStore.online ? 'success' : 'danger'" effect="dark" round>

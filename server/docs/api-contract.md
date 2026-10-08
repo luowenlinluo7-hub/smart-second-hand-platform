@@ -187,16 +187,24 @@ JSON.stringify(price)   // "1899"
 
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| GET | `/products` | 公开 | `keyword?` `categoryId?` `minPrice?` `maxPrice?` `condition?` `sort?`(`latest`\|`price_asc`\|`price_desc`\|`hot`) `page?` `pageSize?` | 分页信封，`list` 为 `Product` |
-| GET | `/products/:id` | 公开 | — | `ProductDetail`（含 `seller`、`category`、`avgRating`、`reviewCount`） |
-| GET | `/products/mine` | SELLER | `status?` `page?` `pageSize?` | 分页信封 |
-| POST | `/products` | SELLER | `title` `description?` `price` `originalPrice?` `images[]` `condition` `categoryId` `stock?` | `Product`（`status=PENDING_REVIEW`） |
-| PATCH | `/products/:id` | SELLER(本人) / ADMIN | 可编辑字段 | `Product` |
-| PATCH | `/products/:id/on-sale` | SELLER(本人) | — | `Product`（`OFF_SHELF`→`ON_SALE`） |
-| DELETE | `/products/:id` | SELLER(本人) / ADMIN | — | `null`（软删：置 `OFF_SHELF`） |
+| GET | `/products` | 公开 | `keyword?`(模糊匹配 title/description) `categoryId?` `condition?` `priceMin?` `priceMax?` `page?` `pageSize?` | 分页信封，仅返回 `ON_SALE` |
+| GET | `/products/:id` | 公开 | — | `Product`（含 `seller`、`category`，`viewCount` 自增 1） |
+| POST | `/products` | SELLER | `title` `description?` `price` `originalPrice?` `images[]` `condition` `categoryId` `stock?` | `Product`（发布即上架 `ON_SALE`） |
+| PUT | `/products/:id` | SELLER(本人) | 可编辑字段（部分更新） | `Product` |
+| DELETE | `/products/:id` | SELLER(本人) | — | `null`（软删：置 `OFF_SHELF`） |
 
-> `price` / `originalPrice` 必须是**数字或数字字符串**，后端用 zod + Prisma `Decimal` 接收，
-> 禁止经 `Number` 二次转换后写库。
+> `price` / `originalPrice` 必须是**数字或数字字符串**，后端用 zod + Prisma `Decimal` 接收，禁止经 `Number` 二次转换后写库。
+> 编辑用**部分更新**语义：未传字段保持原值，出参金额统一 `toFixed(2)`。
+> 越权防护：PUT/DELETE 校验 `sellerId === 当前用户 id`，不符返回 403。
+
+### 4.3.1 图片上传 · `/api/v1/upload`
+
+| 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
+| --- | --- | --- | --- | --- |
+| POST | `/upload` | 登录 | `multipart/form-data`，字段 `files`（多文件，≤9 张，单张 ≤5MB） | `{ urls: string[] }` |
+
+> 支持 jpg / png / webp / gif；文件存 `server/uploads/`，经 `/uploads/<filename>` 静态托管。
+> 前端 vite 已配置 `/uploads` 代理到后端 3000。生产环境建议换 OSS/CDN。
 
 ### 4.4 交易 · `/api/v1/orders`
 
