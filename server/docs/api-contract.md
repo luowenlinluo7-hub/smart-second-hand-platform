@@ -188,14 +188,18 @@ JSON.stringify(price)   // "1899"
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
 | GET | `/products` | 公开 | `keyword?`(模糊匹配 title/description) `categoryId?` `condition?` `priceMin?` `priceMax?` `page?` `pageSize?` | 分页信封，仅返回 `ON_SALE` |
+| GET | `/products/mine` | 登录 | `status?`(`DRAFT`\|`PENDING_REVIEW`\|`ON_SALE`\|`SOLD`\|`OFF_SHELF`\|`REJECTED`) `page?` `pageSize?` | 分页信封 + `counts`（各状态数量），**返回全部状态** |
 | GET | `/products/:id` | 公开 | — | `Product`（含 `seller`、`category`，`viewCount` 自增 1） |
-| POST | `/products` | SELLER | `title` `description?` `price` `originalPrice?` `images[]` `condition` `categoryId` `stock?` | `Product`（发布即上架 `ON_SALE`） |
-| PUT | `/products/:id` | SELLER(本人) | 可编辑字段（部分更新） | `Product` |
-| DELETE | `/products/:id` | SELLER(本人) | — | `null`（软删：置 `OFF_SHELF`） |
+| POST | `/products` | SELLER | `title` `description?` `price` `originalPrice?` `images[]` `condition` `categoryId` `stock?` | `Product`（**进入待审核 `PENDING_REVIEW`**） |
+| PUT | `/products/:id` | SELLER(本人) | 可编辑字段（部分更新） | `Product`（`SOLD` / `PENDING_REVIEW` 状态拒绝编辑，返回 40900） |
+| DELETE | `/products/:id` | SELLER(本人) | — | `null`（软删：置 `OFF_SHELF` 并清空 `publishedAt`；`SOLD` 拒绝，返回 40900） |
 
 > `price` / `originalPrice` 必须是**数字或数字字符串**，后端用 zod + Prisma `Decimal` 接收，禁止经 `Number` 二次转换后写库。
 > 编辑用**部分更新**语义：未传字段保持原值，出参金额统一 `toFixed(2)`。
 > 越权防护：PUT/DELETE 校验 `sellerId === 当前用户 id`，不符返回 403。
+> **审核状态机**：发布 → `PENDING_REVIEW`（`publishedAt` 为 `null`）→ 管理员审核 → `ON_SALE`（写入 `publishedAt`）/ `REJECTED`（写入 `rejectReason`）。
+> 因此卖家必须通过 `/products/mine` 查看待审核商品，`GET /products` 只会返回已上架的。
+> ⚠️ 路由顺序：`/products/mine` 必须注册在 `/products/:id` **之前**，否则 `mine` 会被当作商品 id。
 
 ### 4.3.1 图片上传 · `/api/v1/upload`
 
@@ -395,6 +399,7 @@ curl -X POST "http://localhost:3000/api/v1/products" \
     "images": ["https://cdn.example.com/p/iphone13-1.jpg", "https://cdn.example.com/p/iphone13-2.jpg"],
     "status": "PENDING_REVIEW",
     "stock": 1,
+    "publishedAt": null,         // 待审核阶段未上架，审核通过后才写入时间
     "sellerId": "clz8k1x2b0000abcd1234efgh",
     "categoryId": "clz8k2c4d0001efgh5678ijkl",
     "createdAt": "2026-10-07T09:31:05.120Z"

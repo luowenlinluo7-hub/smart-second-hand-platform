@@ -32,6 +32,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '编辑商品', requiresAuth: true },
   },
   {
+    path: '/my-products',
+    name: 'my-products',
+    component: () => import('@/views/MyProductsView.vue'),
+    meta: { title: '我的商品', requiresAuth: true },
+  },
+  {
+    path: '/admin/products',
+    name: 'admin-products',
+    component: () => import('@/views/AdminProductReviewView.vue'),
+    meta: { title: '商品审核', requiresAuth: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),

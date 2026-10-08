@@ -1,5 +1,5 @@
 import { http } from './request'
-import type { Product, ProductQuery } from '@/types/api'
+import type { Product, ProductQuery, MyProductListResult } from '@/types/api'
 import type { PageResult } from '@/types/api'
 
 // 商品列表（分页 + 筛选）
@@ -38,6 +38,13 @@ export const updateProduct = (
 
 // 下架商品
 export const deleteProduct = (id: string) => http.delete<null>(`/products/${id}`)
+
+// 重新上架（下架/驳回 → 待审核）
+export const relistProduct = (id: string) => http.post<Product>(`/products/${id}/relist`)
+
+// 我的商品（全部状态 + counts）
+export const getMyProducts = (params: { status?: string; page?: number; pageSize?: number }) =>
+  http.get<MyProductListResult>('/products/mine', params as unknown as Record<string, unknown>)
 
 // 多图上传：返回 URL 数组
 export const uploadImages = (files: File[]) => {

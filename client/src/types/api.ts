@@ -97,6 +97,11 @@ export interface ProductQuery {
   pageSize?: number
 }
 
+// 卖家「我的商品」查询结果：额外带各状态数量
+export interface MyProductListResult extends PageResult<Product> {
+  counts: Record<ProductStatus, number>
+}
+
 // 分类
 export interface Category {
   id: string

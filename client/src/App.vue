@@ -26,9 +26,11 @@ const handleLogout = (): void => {
       <nav class="nav">
         <RouterLink to="/">首页</RouterLink>
         <RouterLink to="/dashboard">数据看板</RouterLink>
+        <RouterLink v-if="authStore.isLoggedIn" to="/my-products">我的商品</RouterLink>
         <RouterLink v-if="authStore.user?.role === 'SELLER' || authStore.user?.role === 'ADMIN'" to="/publish">
           发布商品
         </RouterLink>
+        <RouterLink v-if="authStore.user?.role === 'ADMIN'" to="/admin/products">商品审核</RouterLink>
       </nav>
       <div class="right">
         <el-tag :type="appStore.online ? 'success' : 'danger'" effect="dark" round>

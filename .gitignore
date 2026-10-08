@@ -24,3 +24,5 @@ Thumbs.db
 uploads/
 # 临时提交信息文件
 commit_msg_temp.txt
+
+server/uploads/
