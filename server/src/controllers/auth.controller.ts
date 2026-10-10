@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as authService from '../services/auth.service';
 import { ApiError } from '../utils/ApiError';
 import { success } from '../utils/response';
+import { imageUrlSchema } from '../utils/validators';
 
 // ---------- zod 校验规则 ----------
 
@@ -27,7 +28,8 @@ const loginSchema = z.object({
 
 const profileSchema = z.object({
   nickname: z.string().max(30, '昵称最多 30 字').nullable().optional(),
-  avatar: z.string().url('头像必须是合法 URL').nullable().optional(),
+  // 头像：支持本地上传的相对路径或完整 URL
+  avatar: imageUrlSchema.nullable().optional(),
   phone: z
     .string()
     .regex(/^1[3-9]\d{9}$/, '手机号格式不正确')

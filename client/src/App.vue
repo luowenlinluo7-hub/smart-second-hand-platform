@@ -3,9 +3,11 @@ import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useCartStore } from '@/stores/cart'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const cartStore = useCartStore()
 const router = useRouter()
 
 // 全局探活：任何页面进入都更新一次后端连通状态，保证导航栏标签准确
@@ -27,6 +29,7 @@ const handleLogout = (): void => {
         <RouterLink to="/">首页</RouterLink>
         <RouterLink to="/dashboard">数据看板</RouterLink>
         <RouterLink v-if="authStore.isLoggedIn" to="/my-products">我的商品</RouterLink>
+        <RouterLink v-if="authStore.isLoggedIn" to="/orders">我的订单</RouterLink>
         <RouterLink v-if="authStore.user?.role === 'SELLER' || authStore.user?.role === 'ADMIN'" to="/publish">
           发布商品
         </RouterLink>
@@ -36,6 +39,14 @@ const handleLogout = (): void => {
         <el-tag :type="appStore.online ? 'success' : 'danger'" effect="dark" round>
           {{ appStore.online ? '后端已连接' : '后端未连接' }}
         </el-tag>
+
+        <el-badge
+          v-if="authStore.isLoggedIn"
+          :value="cartStore.totalCount"
+          :hidden="cartStore.totalCount === 0"
+        >
+          <el-button text @click="router.push('/cart')">购物车</el-button>
+        </el-badge>
 
         <template v-if="authStore.isLoggedIn && authStore.user">
           <el-dropdown>

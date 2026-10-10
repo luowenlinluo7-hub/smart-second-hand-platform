@@ -3,6 +3,7 @@ import { success } from '../utils/response';
 import adminRouter from './admin';
 import authRouter from './auth';
 import categoryRouter from './category';
+import orderRouter from './order';
 import productRouter from './product';
 import uploadRouter from './upload';
 
@@ -27,6 +28,8 @@ router.use('/auth', authRouter);
 router.use('/categories', categoryRouter);
 // 商品
 router.use('/products', productRouter);
+// 订单
+router.use('/orders', orderRouter);
 // 图片上传
 router.use('/upload', uploadRouter);
 // 管理员

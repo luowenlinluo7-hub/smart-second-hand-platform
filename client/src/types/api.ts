@@ -111,3 +111,58 @@ export interface Category {
   sortOrder: number
   status: string
 }
+
+// 订单状态
+export type OrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PENDING_SHIPMENT'
+  | 'SHIPPED'
+  | 'COMPLETED'
+  | 'REVIEWED'
+  | 'CANCELLED'
+
+// 订单明细（下单快照）
+export interface OrderItem {
+  id: string
+  orderId: string
+  productId: string
+  title: string
+  image: string | null
+  price: string
+  quantity: number
+  subtotal: string
+  status: string
+  createdAt: string
+}
+
+// 订单参与方简要信息
+export interface OrderUserBrief {
+  id: string
+  username: string
+  nickname: string | null
+  avatar: string | null
+}
+
+// 订单
+export interface Order {
+  id: string
+  orderNo: string
+  buyerId: string
+  sellerId: string
+  totalAmount: string
+  status: OrderStatus
+  receiverName: string
+  receiverPhone: string
+  receiverAddress: string
+  remark: string | null
+  paidAt: string | null
+  shippedAt: string | null
+  completedAt: string | null
+  reviewedAt: string | null
+  cancelledAt: string | null
+  createdAt: string
+  updatedAt: string
+  items: OrderItem[]
+  buyer: OrderUserBrief
+  seller: OrderUserBrief
+}

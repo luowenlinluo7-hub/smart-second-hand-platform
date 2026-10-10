@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as productService from '../services/product.service';
 import { ApiError } from '../utils/ApiError';
 import { success } from '../utils/response';
+import { imageUrlListSchema } from '../utils/validators';
 
 // ---------- zod 校验规则 ----------
 
@@ -18,7 +19,7 @@ const productBodySchema = z.object({
     .transform((v) => Number(v))
     .refine((v) => Number.isFinite(v) && v >= 0, '原价必须大于等于 0')
     .optional(),
-  images: z.array(z.string().url('图片必须是合法 URL')).max(9, '最多 9 张图片').default([]),
+  images: imageUrlListSchema.default([]),
   condition: z.enum(['NEW', 'LIKE_NEW', 'GOOD', 'FAIR']).default('GOOD'),
   categoryId: z.string({ error: '请选择分类' }).min(1, '请选择分类'),
   stock: z.number().int().min(1, '库存至少 1').max(999, '库存最多 999').default(1),
@@ -38,7 +39,7 @@ const productUpdateSchema = z.object({
     .transform((v) => Number(v))
     .refine((v) => Number.isFinite(v) && v >= 0, '原价必须大于等于 0')
     .optional(),
-  images: z.array(z.string().url('图片必须是合法 URL')).max(9, '最多 9 张图片').optional(),
+  images: imageUrlListSchema.optional(),
   condition: z.enum(['NEW', 'LIKE_NEW', 'GOOD', 'FAIR']).optional(),
   categoryId: z.string().min(1, '请选择分类').optional(),
   stock: z.number().int().min(1, '库存至少 1').max(999, '库存最多 999').optional(),

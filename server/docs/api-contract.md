@@ -47,6 +47,7 @@ erDiagram
 | Category → Product | 1 : N | `products.categoryId` | 分类归类 |
 | Category → Category | 1 : N | `categories.parentId` | 自关联，二级分类；删除父类置 `NULL` |
 | User → Order | 1 : N | `orders.buyerId` | 买家下单 |
+| User → Order | 1 : N | `orders.sellerId` | 卖家接单（按卖家拆单） |
 | Order → OrderItem | 1 : N | `order_items.orderId` | 级联删除 |
 | Product → OrderItem | 1 : N | `order_items.productId` | 订单↔商品的多对多拆解 |
 | Order → Review | 1 : N | `reviews.orderId` | 一单可评价多个商品；级联删除 |
@@ -57,8 +58,9 @@ erDiagram
 
 1. **订单与商品不直接相连**，统一通过 `OrderItem` 关联，并在 `OrderItem` 中保存
    `title / image / price` 快照 —— 商品后续改价、下架都不影响历史订单。
-2. **卖家不在 `Order` 上冗余**，通过 `OrderItem → Product.sellerId` 推导，
-   避免一个订单出现多个卖家时数据不一致。
+2. **订单按卖家拆单**：`Order` 含 `sellerId`，购物车含多个卖家商品时生成多个订单。
+   这样「整单状态流转」语义才能成立（否则 A 已发货、B 未发货时状态无法表达），
+   也与电商按店铺拆单的标准做法一致。
 3. **金额全部 `Decimal(10, 2)`**，禁止 `Float`（浮点误差会导致对账不平）。
 4. **主键统一 `cuid()`**，非自增、不可枚举，避免爬虫按 id 遍历。
 5. 所有表都具备 `id / createdAt / updatedAt / status / 外键`。
@@ -209,23 +211,45 @@ JSON.stringify(price)   // "1899"
 
 > 支持 jpg / png / webp / gif；文件存 `server/uploads/`，经 `/uploads/<filename>` 静态托管。
 > 前端 vite 已配置 `/uploads` 代理到后端 3000。生产环境建议换 OSS/CDN。
+>
+> **图片字段接受两种格式**（`商品 images` / `评价晒图 images` / `用户头像 avatar`）：
+> 1. 本地上传返回的相对路径：`/uploads/1791614783752-5df3ca2b7f28.png`
+> 2. 外部完整链接：`https://example.com/a.jpg`
+>
+> ⚠️ 后端校验**不可用** `z.string().url()` —— 它要求完整协议，会拒绝本地上传的相对路径。
+> 统一使用 `server/src/utils/validators.ts` 的 `imageUrlSchema`。
 
 ### 4.4 交易 · `/api/v1/orders`
 
+> **按卖家拆单**：`Order` 含 `sellerId`，购物车含多个卖家商品时，`POST /orders` 会为每个卖家各生成一个订单
+> （行业标准做法，保证「整单状态流转」语义成立）。响应 `data` 为订单**数组**。
+
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| POST | `/orders` | 登录 | `items[]{ productId, quantity }` `receiverName` `receiverPhone` `receiverAddress` `remark?` | `Order`（`PENDING_PAYMENT`） |
-| GET | `/orders` | 登录 | `role?`(`buyer`\|`seller`) `status?` `page?` `pageSize?` | 分页信封 |
-| GET | `/orders/:id` | 参与方 / ADMIN | — | `OrderDetail`（含 `items` 快照） |
-| POST | `/orders/:id/pay` | 买家 | `payMethod?` | `Order`（→ `PENDING_SHIPMENT`） |
-| POST | `/orders/:id/ship` | 卖家 | `expressCompany?` `trackingNo?` | `Order`（→ `SHIPPED`） |
-| POST | `/orders/:id/confirm` | 买家 | — | `Order`（→ `COMPLETED`） |
-| POST | `/orders/:id/cancel` | 买家 | `reason?` | `Order`（→ `CANCELLED`） |
-| POST | `/orders/:id/reviews` | 买家 | `items[]{ productId, rating(1-5), content?, images? }` | `Review[]`（订单 → `REVIEWED`） |
+| POST | `/orders` | 登录 | `items[]{ productId, quantity }` `receiverName` `receiverPhone` `receiverAddress` `remark?` | `Order[]`（每个卖家一单，`PENDING_PAYMENT`） |
+| GET | `/orders/buyer` | 登录 | `status?` `page?` `pageSize?` | 分页信封（我买到的） |
+| GET | `/orders/seller` | 登录 | `status?` `page?` `pageSize?` | 分页信封（我卖出的） |
+| GET | `/orders/:id` | 买卖双方 | — | `Order`（含 `items` 快照、买卖双方信息；非参与方 403） |
+| PUT | `/orders/:id/status` | 买家/卖家 | `{ status }` | `Order`（状态流转，见下表） |
+| POST | `/orders/:id/reviews` | 买家 | `{ reviews[]{ productId, rating(1-5), content?, images? } }` | `Order`（订单 → `REVIEWED`） |
 
-> **下单事务**：校验商品 `status=ON_SALE` 且库存充足 → 创建 `Order` + `OrderItem[]`
-> （写入快照并计算 `subtotal`）→ 汇总 `totalAmount` → 商品置 `SOLD`。
-> 全流程放在 `prisma.$transaction()` 内，避免超卖。
+> ⚠️ 路由顺序：`/buyer`、`/seller` 必须注册在 `/:id` **之前**，否则会被当成订单 id。
+
+**状态流转规则**（`PUT /orders/:id/status`，严格校验「角色 + 前置状态」）
+
+| 前置状态 | 目标状态 | 谁可操作 | 副作用 |
+| --- | --- | --- | --- |
+| `PENDING_PAYMENT` | `PENDING_SHIPMENT` | 买家 | 写 `paidAt`（模拟支付，无真实支付） |
+| `PENDING_PAYMENT` | `CANCELLED` | 买家 | 写 `cancelledAt`，**商品回滚 `ON_SALE`** |
+| `PENDING_SHIPMENT` | `SHIPPED` | **卖家** | 写 `shippedAt` |
+| `SHIPPED` | `COMPLETED` | 买家 | 写 `completedAt` |
+| `COMPLETED` | `REVIEWED` | 买家（评价接口触发） | 写 `reviewedAt` |
+| 其他组合 | — | — | `40300`（角色不符）/ `40900`（状态不符） |
+
+> `REVIEWED` 只能由评价接口触发，不接受通过 `/status` 直接指定。
+> **下单事务**：校验商品 `status=ON_SALE` 且库存充足 → 按 `sellerId` 分组 → 每组创建
+> `Order` + `OrderItem[]`（快照 `title`/`image`/`price`，计算 `subtotal`）→ 汇总 `totalAmount`
+> → 商品置 `SOLD`。全流程在 `prisma.$transaction()` 内，避免超卖。
 
 ### 4.5 AI 搜索 · `/api/v1/ai`
 
@@ -288,7 +312,7 @@ JSON.stringify(price)   // "1899"
 
 ## 五、索引建议
 
-`schema.prisma` 中已声明 **29 个索引**（含唯一索引），加上 6 个主键隐式索引，落库后共 **35 个索引**。设计依据：
+`schema.prisma` 中已声明 **30 个索引**（含唯一索引），加上 6 个主键隐式索引，落库后共 **36 个索引**。设计依据：
 
 | 表 | 索引 | 服务的查询 |
 | --- | --- | --- |
@@ -300,7 +324,8 @@ JSON.stringify(price)   // "1899"
 | `products` | `(status, createdAt)` | 首页在售商品倒序（覆盖索引，免排序） |
 | `products` | `(status, price)` `(status, viewCount)` | 价格区间 / 排序、热门榜 |
 | `orders` | `orderNo`(唯一) | 对外订单号查询 |
-| `orders` | `(buyerId, status)` | 「我的订单」按状态筛选 |
+| `orders` | `(buyerId, status)` | 买家「我的订单」按状态筛选 |
+| `orders` | `(sellerId, status)` | 卖家「我的订单」按状态筛选 |
 | `orders` | `(status, createdAt)` `(createdAt)` | 待处理订单、GMV 按日聚合 |
 | `order_items` | `(orderId, productId)`(唯一) | 防重复下单同一商品 |
 | `order_items` | `(orderId)` `(productId)` `(status)` | 订单详情、销量统计、分行履约 |

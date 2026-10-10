@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules, type UploadFile } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { updatePassword, updateProfile } from '@/api/auth'
+import { uploadImages } from '@/api/product'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -12,12 +14,50 @@ const profileRef = ref<FormInstance>()
 const pwdRef = ref<FormInstance>()
 const savingProfile = ref(false)
 const savingPwd = ref(false)
+const uploadingAvatar = ref(false)
 
 const profileForm = reactive({
   nickname: '',
   avatar: '',
   phone: '',
 })
+
+// 上传前校验：仅图片、≤5MB（与后端 multer 限制保持一致）
+const beforeAvatarUpload = (file: File): boolean => {
+  const isImage = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)
+  if (!isImage) {
+    ElMessage.error('头像仅支持 jpg / png / webp / gif')
+    return false
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('头像大小不能超过 5MB')
+    return false
+  }
+  return true
+}
+
+// 手动上传：走统一的 http 封装（自动带 token、统一拆包）
+const onAvatarChange = async (file: UploadFile): Promise<void> => {
+  if (!file.raw) return
+  // auto-upload 关闭时 before-upload 不触发，这里手动校验
+  if (!beforeAvatarUpload(file.raw)) return
+
+  uploadingAvatar.value = true
+  try {
+    const result = await uploadImages([file.raw])
+    const url = result.urls[0]
+    if (!url) {
+      ElMessage.error('头像上传失败')
+      return
+    }
+    profileForm.avatar = url
+    ElMessage.success('头像已上传，记得点击「保存资料」')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '头像上传失败')
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
 
 const pwdForm = reactive({
   oldPassword: '',
@@ -27,7 +67,6 @@ const pwdForm = reactive({
 
 const profileRules: FormRules = {
   nickname: [{ max: 30, message: '昵称最多 30 字', trigger: 'blur' }],
-  avatar: [{ type: 'url', message: '头像必须是合法 URL', trigger: 'blur' }],
   phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
 }
 
@@ -137,8 +176,32 @@ const handleLogout = (): void => {
             <el-form-item label="手机号" prop="phone">
               <el-input v-model="profileForm.phone" placeholder="手机号（选填）" />
             </el-form-item>
-            <el-form-item label="头像 URL" prop="avatar">
-              <el-input v-model="profileForm.avatar" placeholder="头像图片链接（选填）" />
+            <el-form-item label="头像" prop="avatar">
+              <div class="avatar-upload">
+                <el-upload
+                  :show-file-list="false"
+                  :auto-upload="false"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  :on-change="onAvatarChange"
+                >
+                  <div v-loading="uploadingAvatar" class="avatar-box">
+                    <img v-if="profileForm.avatar" :src="profileForm.avatar" class="avatar-img" alt="头像" />
+                    <el-icon v-else class="avatar-plus"><Plus /></el-icon>
+                  </div>
+                </el-upload>
+                <div class="avatar-tip">
+                  点击上传头像，支持 jpg / png / webp / gif，≤5MB
+                  <el-button
+                    v-if="profileForm.avatar"
+                    text
+                    type="danger"
+                    size="small"
+                    @click="profileForm.avatar = ''"
+                  >
+                    移除
+                  </el-button>
+                </div>
+              </div>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存资料</el-button>
@@ -181,5 +244,44 @@ const handleLogout = (): void => {
 .profile-page {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-box {
+  width: 88px;
+  height: 88px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.avatar-box:hover {
+  border-color: var(--el-color-primary);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-plus {
+  font-size: 24px;
+  color: #8c939d;
+}
+
+.avatar-tip {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

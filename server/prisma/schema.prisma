@@ -102,6 +102,7 @@ model User {
   // 关系
   products        Product[] @relation("ProductSeller") // 我发布的商品
   buyerOrders     Order[]   @relation("OrderBuyer") // 我作为买家的订单
+  sellerOrders    Order[]   @relation("OrderSeller") // 我作为卖家的订单（按卖家拆单）
   writtenReviews  Review[]  @relation("ReviewReviewer") // 我写出的评价
   receivedReviews Review[]  @relation("ReviewReviewee") // 我收到的评价
 
@@ -175,6 +176,9 @@ model Order {
   orderNo         String      @unique // 对外订单号，不暴露内部 id
   buyerId         String
   buyer           User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  // 按卖家拆单：每个订单只属于一个卖家
+  sellerId        String
+  seller          User        @relation("OrderSeller", fields: [sellerId], references: [id])
   totalAmount     Decimal     @db.Decimal(10, 2) // 订单总额 = 所有 OrderItem.subtotal 之和
   status          OrderStatus @default(PENDING_PAYMENT)
   receiverName    String // 收货人
@@ -194,6 +198,7 @@ model Order {
   reviews Review[]
 
   @@index([buyerId, status]) // 买家「我的订单」按状态筛选
+  @@index([sellerId, status]) // 卖家「我的订单」按状态筛选
   @@index([status, createdAt]) // 卖家 / 管理员待处理订单
   @@index([createdAt]) // 看板按日期聚合 GMV
   @@map("orders")

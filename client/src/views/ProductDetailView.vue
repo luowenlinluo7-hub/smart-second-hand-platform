@@ -3,10 +3,14 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getProduct } from '@/api/product'
+import { useAuthStore } from '@/stores/auth'
+import { useCartStore } from '@/stores/cart'
 import type { Product, ProductCondition } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const cartStore = useCartStore()
 
 const loading = ref(false)
 const product = ref<Product | null>(null)
@@ -16,6 +20,47 @@ const conditionLabels: Record<ProductCondition, string> = {
   LIKE_NEW: '几乎全新',
   GOOD: '轻微使用痕迹',
   FAIR: '明显使用痕迹',
+}
+
+// 加入购物车前的统一校验
+const ensureBuyable = (): boolean => {
+  if (!product.value) return false
+  if (!authStore.isLoggedIn) {
+    ElMessage.warning('请先登录')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return false
+  }
+  if (product.value.status !== 'ON_SALE') {
+    ElMessage.warning('该商品已售出或已下架')
+    return false
+  }
+  if (product.value.sellerId === authStore.user?.id) {
+    ElMessage.warning('不能购买自己发布的商品')
+    return false
+  }
+  return true
+}
+
+const toCartItem = (p: Product) => ({
+  productId: p.id,
+  title: p.title,
+  price: p.price,
+  image: p.images?.[0] ?? null,
+  sellerId: p.sellerId,
+  sellerName: p.seller.nickname || p.seller.username,
+})
+
+const addToCart = (): void => {
+  if (!ensureBuyable() || !product.value) return
+  cartStore.add(toCartItem(product.value))
+  ElMessage.success('已加入购物车')
+}
+
+// 立即购买：加入购物车后直接去结算
+const buyNow = (): void => {
+  if (!ensureBuyable() || !product.value) return
+  cartStore.add(toCartItem(product.value))
+  router.push('/cart')
 }
 
 onMounted(async () => {
@@ -72,7 +117,18 @@ onMounted(async () => {
 
             <div class="actions">
               <el-button @click="router.back()">返回</el-button>
-              <el-button type="primary" disabled>联系卖家（待开发）</el-button>
+              <el-button
+                v-if="product.status === 'ON_SALE'"
+                :type="cartStore.has(product.id) ? 'default' : 'warning'"
+                :disabled="cartStore.has(product.id)"
+                @click="addToCart"
+              >
+                {{ cartStore.has(product.id) ? '已在购物车' : '加入购物车' }}
+              </el-button>
+              <el-button v-if="product.status === 'ON_SALE'" type="primary" @click="buyNow">
+                立即购买
+              </el-button>
+              <el-tag v-else type="info" size="large">该商品已售出或已下架</el-tag>
             </div>
           </el-col>
         </el-row>
