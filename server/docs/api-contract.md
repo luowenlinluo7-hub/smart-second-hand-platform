@@ -213,10 +213,11 @@ JSON.stringify(price)   // "1899"
 > 前端 vite 已配置 `/uploads` 代理到后端 3000。生产环境建议换 OSS/CDN。
 >
 > **图片字段接受两种格式**（`商品 images` / `评价晒图 images` / `用户头像 avatar`）：
-> 1. 本地上传返回的相对路径：`/uploads/1791614783752-5df3ca2b7f28.png`
+> 1. 站内相对路径：`/uploads/1791614783752-5df3ca2b7f28.png`（用户上传）
+>    或 `/demo/p1.jpg`（平台内置示例图，seed 数据使用，保证断网时不裂图）
 > 2. 外部完整链接：`https://example.com/a.jpg`
 >
-> ⚠️ 后端校验**不可用** `z.string().url()` —— 它要求完整协议，会拒绝本地上传的相对路径。
+> ⚠️ 后端校验**不可用** `z.string().url()` —— 它要求完整协议，会拒绝站内相对路径。
 > 统一使用 `server/src/utils/validators.ts` 的 `imageUrlSchema`。
 
 ### 4.4 交易 · `/api/v1/orders`

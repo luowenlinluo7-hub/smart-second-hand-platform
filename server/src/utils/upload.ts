@@ -1,10 +1,13 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import multer from 'multer';
+import { env } from '../config/env';
 
-// 上传目录：server/uploads（已在 .gitignore 中忽略）
-const uploadDir = path.resolve(process.cwd(), 'uploads');
+// 上传目录：默认 <cwd>/uploads，可用 UPLOAD_DIR 覆盖（演示包中固定在包内）
+const uploadDir = env.UPLOAD_DIR
+  ? path.resolve(env.UPLOAD_DIR)
+  : path.resolve(process.cwd(), 'uploads');
 
 // 确保目录存在（multer 磁盘存储不会自动建目录）
 fs.mkdirSync(uploadDir, { recursive: true });

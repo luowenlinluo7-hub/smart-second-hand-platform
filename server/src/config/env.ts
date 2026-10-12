@@ -10,6 +10,10 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   // 前端跨域白名单，多个用英文逗号分隔
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  // 前端构建产物目录：配置后由后端同源托管（生产 / 答辩演示包使用；开发模式走 vite）
+  CLIENT_DIST: z.string().optional(),
+  // 图片上传目录：默认为 <cwd>/uploads，可用此项覆盖（演示包中固定在包内）
+  UPLOAD_DIR: z.string().optional(),
   // AI 相关配置仅后端使用，前端永远拿不到
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_API_URL: z.string().optional(),

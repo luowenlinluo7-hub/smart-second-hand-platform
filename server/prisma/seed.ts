@@ -30,8 +30,31 @@ const CATEGORY_PHONE = 'seed-cat-phone';
 const CATEGORY_COMPUTER = 'seed-cat-computer';
 const CATEGORY_APPLIANCE = 'seed-cat-appliance';
 
-const img = (seed: string, n: number): string[] =>
-  Array.from({ length: n }, (_, i) => `https://picsum.photos/seed/${seed}-${i + 1}/640/480`);
+// 商品图片全部使用本地占位图（client/public/demo/pN.jpg）。
+// 不使用任何外部图床，保证断网 / 离线演示环境下图片也能正常显示。
+const DEMO_IMAGE_COUNT = 12;
+
+// 每个商品从不同的占位图开始取，避免所有商品长得一样
+const IMAGE_START: Record<string, number> = {
+  iphone13: 0,
+  mi13: 1,
+  ipadair4: 2,
+  airpods: 3,
+  macbookm1: 4,
+  thinkpad: 5,
+  mxmaster3s: 6,
+  dysonv8: 7,
+  midea: 8,
+  joyoung: 9,
+};
+
+const img = (slug: string, n: number): string[] => {
+  const start = IMAGE_START[slug] ?? 0;
+  return Array.from(
+    { length: n },
+    (_, i) => `/demo/p${((start + i) % DEMO_IMAGE_COUNT) + 1}.jpg`,
+  );
+};
 
 const PRODUCTS: SeedProduct[] = [
   {

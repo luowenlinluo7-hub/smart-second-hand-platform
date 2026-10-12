@@ -31,6 +31,7 @@
 │       ├── middleware/         鉴权 / 统一错误处理
 │       ├── routes/             路由（挂载在 /api 前缀）
 │       └── utils/              工具
+├── scripts/demo/               答辩离线演示包（打包脚本 + 启动器 + 说明）
 ├── .env.example
 └── README.md
 ```
@@ -133,6 +134,45 @@ Vite 已配置代理 `/api` → `http://localhost:3000`，开发时无需额外�
 | `package.json#prisma is deprecated` | Prisma 7 将移除这种配置方式 | 当前锁定 `6.x`，仅告警可忽略；升 7 需改用 `prisma.config.ts` |
 | `npm run seed` 提示没有 seed 配置 | 只加了 `scripts.seed`，缺 `prisma.seed` | 两处都要配（本项目已配，见 `server/package.json`） |
 | seed 报唯一约束冲突 | 库里已有同 `username`/`email` 但 id 不同 | seed 按固定主键 upsert；必要时 `migrate reset` 后重跑 |
+
+## 答辩演示包（零环境离线运行）
+
+如果需要在**没有 Node、MySQL、Git，装不上 VS Code 扩展、甚至没有网络**的电脑上演示本项目
+（例如学校答辩机），用打包脚本生成一个「拷 U 盘 → 双击即用」的离线包。
+
+**特点**：自带便携 Node + 便携 MariaDB；数据库在**打包时**就已初始化并灌好演示数据，
+目标机器上不需要任何安装或导入步骤，全程离线，也不依赖系统 PATH。
+
+### 生成
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\demo\build-demo.ps1
+```
+
+首次执行会联网下载 Node 与 MariaDB 官方压缩包并缓存，之后重复打包直接复用缓存。
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `-OutDir` | `F:\smart-second-hand-demo` | 输出目录，**必须是纯英文路径**（脚本会校验） |
+| `-CacheDir` | `F:\demo-build` | 运行时压缩包与构建缓存目录 |
+| `-SkipDownloads` | 关闭 | 只用已缓存的 zip，完全不联网 |
+| `-ReuseDb` | 关闭 | 复用已有 `data\`，跳过数据库重新初始化（调试用） |
+
+### 使用
+
+1. 把输出目录整体拷到目标电脑（**路径必须是纯英文**，例如 `D:\demo`）
+2. 双击 `启动演示.bat` —— 自动启动数据库 → 启动服务 → 打开浏览器（约 10～20 秒）
+3. 访问 <http://localhost:3210>，演示账号见包内 `使用说明.txt`
+4. 结束时按 `Ctrl+C`，或双击 `停止演示.bat`（务必用这两种方式，直接关窗口可能损坏数据文件）
+
+### 设计说明
+
+- 端口用 **3310（数据库）/ 3210（应用）**，避开目标机器上可能已装的 MySQL（3306）与占用 3000 的程序
+- 前端构建产物由后端**同源托管**（`CLIENT_DIST`），因此演示包只需暴露一个端口，前端零改动
+- 演示图片使用仓库内 `client/public/demo/*.jpg` 占位图，不依赖外网；
+  需要重新生成时执行 `scripts/demo/make-placeholders.ps1`（该脚本必须保存为 **UTF-8 BOM**）
+- 演示包约 310 MB，放在仓库之外，**不进 git**
+- 包内 `.env` 是公开的演示配置（root 无密码、仅监听 `127.0.0.1`、JWT 密钥公开），**严禁用于生产**
 
 ## 在线 Demo
 （待部署后补充）
