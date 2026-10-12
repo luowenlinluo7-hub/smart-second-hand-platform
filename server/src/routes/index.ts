@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { success } from '../utils/response';
 import adminRouter from './admin';
+import aiRouter from './ai';
 import authRouter from './auth';
 import categoryRouter from './category';
 import orderRouter from './order';
@@ -32,6 +33,8 @@ router.use('/products', productRouter);
 router.use('/orders', orderRouter);
 // 图片上传
 router.use('/upload', uploadRouter);
+// AI 自然语言搜索（自带限流）
+router.use('/ai', aiRouter);
 // 管理员
 router.use('/admin', adminRouter);
 

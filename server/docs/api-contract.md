@@ -256,36 +256,78 @@ JSON.stringify(price)   // "1899"
 
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| POST | `/ai/search` | 公开（建议登录） | `{ query: string, page?, pageSize? }` | `{ filters, list, total, page, pageSize }` |
-| POST | `/ai/parse` | 登录 | `{ query: string }` | `{ filters }`（仅调试用，不查库） |
+| POST | `/ai/search` | 公开 | `{ query: string, page?, pageSize? }` | `{ parsed, relaxed, relaxedNote, source, parseNote, list, total, page, pageSize }` |
+| POST | `/ai/parse` | 公开 | `{ query: string }` | `{ parsed, source, note }`（仅解析，不查库） |
+
+**限流**：整个 `/api/ai` 前缀按 IP 限流 **10 次 / 分钟**，超出返回 HTTP 429 + `code: 42900`。
+
+**`parsed` 结构**（前端「已识别」标签直接消费）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `category` | `{ id, name } \| null` | 已映射到库中真实分类；映射不到时为 `null` |
+| `condition` | `ProductCondition \| null` | 成色枚举，识别不了时为 `null` |
+| `conditionLabel` | `string \| null` | 用户原始说法（如「九成新」），用于展示 |
+| `priceMin` / `priceMax` | `number \| null` | 价格区间 |
+| `keyword` | `string` | 关键词（可能为空字符串） |
+
+**`source` 取值**（条件来源，前端据此提示用户）
+
+| 值 | 含义 |
+| --- | --- |
+| `ai` | 真实调用 DeepSeek 成功 |
+| `mock` | 未配置 `DEEPSEEK_API_KEY`，或 `AI_MOCK=true`，走本地规则解析 |
+| `fallback` | 模型超时 / 报错 / 返回内容无法解析，降级为本地规则解析 |
 
 **请求 / 响应示例**
 
 ```jsonc
 // 请求
-{ "query": "1000 元以内的九成新 iPhone，最好在广州", "page": 1, "pageSize": 20 }
+{ "query": "九成新2000以内的游戏本", "page": 1, "pageSize": 12 }
 
 // 响应
 {
   "code": 0,
   "message": "ok",
   "data": {
-    "filters": {                       // DeepSeek 自然语言 → 结构化条件
-      "keyword": "iPhone",
-      "maxPrice": "1000.00",
-      "condition": ["LIKE_NEW", "GOOD"],
-      "city": "广州"
+    "parsed": {
+      "category": { "id": "seed-cat-computer", "name": "电脑办公" },
+      "condition": "LIKE_NEW",
+      "conditionLabel": "九成新",
+      "priceMin": null,
+      "priceMax": 2000,
+      "keyword": "游戏本"
     },
+    "relaxed": false,          // 条件过严被放宽时为 true
+    "relaxedNote": null,       // 放宽时给出中文说明，如「已忽略成色要求」
+    "source": "ai",
+    "parseNote": null,         // 降级 / mock 时的说明文字
     "list": [],
-    "total": 6,
+    "total": 2,
     "page": 1,
-    "pageSize": 20
+    "pageSize": 12
   }
 }
 ```
 
+**处理链路**：自然语言 → 模型输出 JSON → zod 宽松校验 → **逐字段清洗（异常值丢弃）**
+→ 映射成真实分类与成色枚举 → Prisma 动态 where 查询。
+
+**条件过严时的放宽阶梯**（严格匹配为空才逐级放宽，**关键词永不丢弃**）
+
+| 步骤 | 保留的条件 |
+| --- | --- |
+| 1 | 分类 + 成色 + 价格 + 关键词（严格） |
+| 2 | 分类 + 价格 + 关键词 |
+| 3 | 分类 + 成色 + 关键词 |
+| 4 | 分类 + 关键词 |
+| 5 | 成色 + 价格 + 关键词 |
+| 6 | 仅关键词 |
+
+六步全空时返回空列表（**不会**退化成返回全量商品）。
+
 > `DEEPSEEK_API_KEY` **只能在后端 `.env` 中使用**，前端只调用 `/ai/search`，
-> 绝不接触 Key，也绝不直连 DeepSeek。解析出的 `filters` 必须经 zod 白名单校验后
+> 绝不接触 Key，也绝不直连 DeepSeek。模型输出必须经 zod 校验与逐字段清洗后
 > 再交给 Prisma 查询，禁止把模型输出直接拼进查询。
 
 ### 4.6 数据看板 · `/api/v1/dashboard`

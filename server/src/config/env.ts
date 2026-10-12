@@ -17,6 +17,15 @@ const envSchema = z.object({
   // AI 相关配置仅后端使用，前端永远拿不到
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_API_URL: z.string().optional(),
+  // 模型名，随账号可用模型调整（如 deepseek-chat / deepseek-reasoner）
+  DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
+  // 单次模型调用的超时（毫秒），超时即降级为规则解析
+  AI_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  // 强制走本地规则解析（断网 / 答辩演示时使用），不消耗 API 额度
+  AI_MOCK: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true' || value === '1'),
 });
 
 const parsed = envSchema.safeParse(process.env);

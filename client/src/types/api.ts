@@ -97,6 +97,46 @@ export interface ProductQuery {
   pageSize?: number
 }
 
+// ---------- AI 自然语言搜索 ----------
+
+// 条件来源：ai=真实模型 / mock=本地规则解析 / fallback=模型不可用后降级
+export type AiParseSource = 'ai' | 'mock' | 'fallback'
+
+// 解析出的分类（已对应到真实分类）
+export interface AiParsedCategory {
+  id: string
+  name: string
+}
+
+// AI 解析出的筛选条件
+export interface AiParsedFilters {
+  category: AiParsedCategory | null
+  condition: ProductCondition | null
+  // 用户原始说法（如「九成新」），用于前端展示
+  conditionLabel: string | null
+  priceMin: number | null
+  priceMax: number | null
+  keyword: string
+}
+
+// POST /api/ai/search 的返回数据
+export interface AiSearchResult extends PageResult<Product> {
+  parsed: AiParsedFilters
+  // 条件过严时是否放宽过筛选条件
+  relaxed: boolean
+  relaxedNote: string | null
+  source: AiParseSource
+  // 降级或启用 mock 时的说明文字
+  parseNote: string | null
+}
+
+// POST /api/ai/parse 的返回数据（只解析不查库）
+export interface AiParseResult {
+  parsed: AiParsedFilters
+  source: AiParseSource
+  note: string | null
+}
+
 // 卖家「我的商品」查询结果：额外带各状态数量
 export interface MyProductListResult extends PageResult<Product> {
   counts: Record<ProductStatus, number>
