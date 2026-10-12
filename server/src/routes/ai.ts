@@ -25,5 +25,7 @@ router.use(aiLimiter);
 // 公开接口：未登录用户也能体验，成本由限流兜底
 router.post('/search', aiController.search);
 router.post('/parse', aiController.parse);
+// AI 导购助手（SSE 流式，同样受限流保护）
+router.post('/chat', aiController.chat);
 
 export default router;

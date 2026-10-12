@@ -133,7 +133,7 @@ const sanitize = (raw: AiRawFilters, categories: CategoryRef[]): ParsedFilters =
 };
 
 // 清洗后一个有效条件都没有 → 视为解析失败，走兜底
-const isEmptyFilters = (filters: ParsedFilters): boolean =>
+export const isEmptyFilters = (filters: ParsedFilters): boolean =>
   !filters.category &&
   !filters.condition &&
   filters.priceMin === null &&
@@ -265,21 +265,28 @@ const loadCategories = (): Promise<CategoryRef[]> =>
 
 const MOCK_NOTE = '已使用本地规则解析（不消耗 API 额度）';
 
+export interface ParseOptions {
+  // 强制走本地规则解析。用于追问句这类「本地规则已经够用」的场景，
+  // 省掉一次模型调用。
+  preferLocal?: boolean;
+}
+
 // 对外入口：解析一句自然语言，返回筛选条件 + 条件来源
-export const parseQuery = async (query: string): Promise<ParseOutcome> => {
+export const parseQuery = async (
+  query: string,
+  options: ParseOptions = {},
+): Promise<ParseOutcome> => {
   const categories = await loadCategories();
   const categoryNames = categories.map((item) => item.name);
+  const fromRules = (note: string, source: ParseSource = 'mock'): ParseOutcome => ({
+    filters: sanitize(parseByRules(query, categoryNames), categories),
+    source,
+    note,
+  });
 
-  if (env.AI_MOCK) {
-    return { filters: sanitize(parseByRules(query, categoryNames), categories), source: 'mock', note: MOCK_NOTE };
-  }
-  if (!env.DEEPSEEK_API_KEY) {
-    return {
-      filters: sanitize(parseByRules(query, categoryNames), categories),
-      source: 'mock',
-      note: '未配置 DEEPSEEK_API_KEY，已使用本地规则解析',
-    };
-  }
+  if (options.preferLocal) return fromRules('追问句使用本地规则解析，未调用模型');
+  if (env.AI_MOCK) return fromRules(MOCK_NOTE);
+  if (!env.DEEPSEEK_API_KEY) return fromRules('未配置 DEEPSEEK_API_KEY，已使用本地规则解析');
 
   try {
     const filters = sanitize(await callDeepSeek(query, categories), categories);
@@ -287,10 +294,6 @@ export const parseQuery = async (query: string): Promise<ParseOutcome> => {
     return { filters, source: 'ai', note: null };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return {
-      filters: sanitize(parseByRules(query, categoryNames), categories),
-      source: 'fallback',
-      note: `AI 解析不可用，已降级为本地规则解析（${reason}）`,
-    };
+    return fromRules(`AI 解析不可用，已降级为本地规则解析（${reason}）`, 'fallback');
   }
 };

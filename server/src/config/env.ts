@@ -21,6 +21,10 @@ const envSchema = z.object({
   DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
   // 单次模型调用的超时（毫秒），超时即降级为规则解析
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  // AI 助手流式回答的整体超时（毫秒）：流式需要比一次性调用更宽
+  AI_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  // 首字超时（毫秒）：模型迟迟不出第一个字就放弃，避免用户干等
+  AI_FIRST_TOKEN_TIMEOUT_MS: z.coerce.number().int().positive().default(6000),
   // 强制走本地规则解析（断网 / 答辩演示时使用），不消耗 API 额度
   AI_MOCK: z
     .string()

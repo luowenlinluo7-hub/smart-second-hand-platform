@@ -128,6 +128,8 @@ export interface AiSearchResult extends PageResult<Product> {
   source: AiParseSource
   // 降级或启用 mock 时的说明文字
   parseNote: string | null
+  // 结果是否偏弱（命中很少或相关性很低）
+  weak: boolean
 }
 
 // POST /api/ai/parse 的返回数据（只解析不查库）
