@@ -75,14 +75,42 @@ const trendOption = computed<EChartsOption>(() => {
   return {
     tooltip: {
       trigger: 'axis',
-      valueFormatter: (value) => Number(value).toFixed(2),
+      // 两条序列单位不同，必须分别格式化：
+      // 金额保留两位小数，订单量是整数（不能套统一的 toFixed(2)，否则订单量会显示成 "3.00"）
+      formatter: (params) => {
+        const list = Array.isArray(params) ? params : [params]
+        const first = list[0] as { axisValue?: string } | undefined
+        const lines: string[] = [String(first?.axisValue ?? '')]
+        for (const raw of list) {
+          const item = raw as { seriesName?: string; value?: unknown; marker?: string }
+          const value = Number(item.value ?? 0)
+          const text =
+            item.seriesName === '成交额' ? `¥${value.toFixed(2)}` : `${Math.round(value)} 笔`
+          lines.push(`${item.marker ?? ''}${item.seriesName}：${text}`)
+        }
+        return lines.join('<br/>')
+      },
     },
-    legend: { data: ['成交额', '订单量'], right: 0, top: 0 },
-    grid: { left: 12, right: 12, top: 40, bottom: 8, containLabel: true },
+    // 图例居中：左右轴名分别贴在画布两侧，居中才不会与它们挤在一起
+    legend: { data: ['成交额', '订单量'], top: 0, left: 'center' },
+    // top 留出图例与轴名的空间，避免轴名压到图例或数据线
+    grid: { left: 12, right: 12, top: 64, bottom: 8, containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: trend?.dates ?? [] },
     yAxis: [
-      { type: 'value', name: '成交额(元)' },
-      { type: 'value', name: '订单量', minInterval: 1 },
+      {
+        type: 'value',
+        name: '成交额(元)',
+        nameGap: 16,
+        nameTextStyle: { align: 'left', padding: [0, 0, 0, -8] },
+      },
+      {
+        type: 'value',
+        name: '订单量(笔)',
+        // 订单量是整数，避免出现 0.5 这种刻度
+        minInterval: 1,
+        nameGap: 16,
+        nameTextStyle: { align: 'right', padding: [0, -8, 0, 0] },
+      },
     ],
     series: [
       {
