@@ -28,7 +28,7 @@ const handleLogout = (): void => {
       <div class="brand">智能二手交易平台</div>
       <nav class="nav">
         <RouterLink to="/">首页</RouterLink>
-        <RouterLink to="/dashboard">数据看板</RouterLink>
+        <RouterLink v-if="authStore.user?.role === 'ADMIN'" to="/dashboard">数据看板</RouterLink>
         <RouterLink v-if="authStore.isLoggedIn" to="/my-products">我的商品</RouterLink>
         <RouterLink v-if="authStore.isLoggedIn" to="/orders">我的订单</RouterLink>
         <RouterLink v-if="authStore.user?.role === 'SELLER' || authStore.user?.role === 'ADMIN'" to="/publish">
