@@ -397,15 +397,75 @@ JSON.stringify(price)   // "1899"
 **建议词**：由后端按阶段从白名单生成，**不让模型自由生成** ——
 避免出现「可以便宜点吗」这种平台答不出来的建议（本项目无议价功能）。
 
-### 4.6 数据看板 · `/api/v1/dashboard`
+### 4.6 数据看板 · `/api/v1/admin/dashboard`
+
+看板接口统一挂在 `/api/admin/*` 下，复用该 router 已注册的 `authenticate` + `requireRole('ADMIN')`，
+无需在每个接口上重复声明鉴权。
 
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| GET | `/dashboard/seller` | SELLER | `days?`(默认 30) | `{ onSaleCount, soldCount, gmv, pendingShipCount, avgRating }` |
-| GET | `/dashboard/seller/trend` | SELLER | `days?` | `{ dates[], gmv[], orderCount[] }`（ECharts 折线） |
-| GET | `/dashboard/admin` | ADMIN | `days?` | `{ userCount, productCount, orderCount, gmv, pendingAuditCount }` |
-| GET | `/dashboard/admin/trend` | ADMIN | `days?` `metric?` | `{ dates[], values[] }` |
-| GET | `/dashboard/admin/category-distribution` | ADMIN | — | `{ categories[], counts[] }`（ECharts 饼图） |
+| GET | `/admin/dashboard` | ADMIN | `days?`（默认 7，范围 1~90） | 见下方结构说明 |
+
+**响应结构**
+
+```jsonc
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "kpi": {
+      "userCount": 5,
+      "productCount": 35,
+      "orderCount": 20,
+      "gmv": "22705.00",         // 字符串，严格两位小数
+      "onSaleCount": 14,         // 在售商品数
+      "pendingAuditCount": 1     // 待审核数
+    },
+    "trend": {                   // 长度 = days，按日期升序，三条数组等长
+      "dates": ["10-08", "10-09"],
+      "gmv": ["1460.00", "3930.00"],
+      "orderCount": [2, 2]
+    },
+    "orderStatus": [             // 固定 6 项，未出现的状态补 0，保证图例稳定
+      { "status": "PENDING_PAYMENT", "name": "待付款", "value": 2 }
+    ],
+    "categoryShare": [           // 已过滤 value=0 的分类
+      { "name": "手机数码", "value": 11 }
+    ],
+    "topProducts": [             // 高价值商品 Top 5
+      { "productId": "seed-hist-05", "title": "[历史] MacBook Air M2 8G+256G", "totalQuantity": 1, "totalAmount": "4200.00" }
+    ],
+    "fulfillment": {             // 付款 → 发货
+      "avgHours": 27.4,
+      "sampleCount": 13
+    }
+  }
+}
+```
+
+**口径约定**
+
+| 指标 | 口径 |
+| --- | --- |
+| **GMV** | 仅统计**已付款**订单（`paidAt` 非空）即 `PENDING_SHIPMENT` / `SHIPPED` / `COMPLETED` / `REVIEWED`；**不含** `PENDING_PAYMENT` 与 `CANCELLED` |
+| **趋势** | 三条序列都按**下单日期**（`createdAt`）归组，只用一个日期轴，口径一致易核对；`gmv` 仅累计其中的已付款订单 |
+| **金额** | 一律 `toFixed(2)` 字符串。**不可直接 `toString()`**，Prisma Decimal 会丢掉尾随零（`1899.00` → `"1899"`） |
+| **Top 5** | 按 `_sum.subtotal`（成交额）降序。二手商品单件交易，`quantity` 恒为 1，按销量排行没有区分度 |
+| **履约时长** | `shippedAt - paidAt` 的平均小时数；无样本时 `avgHours` 为 `null` |
+| **分类占比** | 按分类统计**全部**商品数（不限状态），已过滤 0 值 |
+
+**按天分组的实现说明**
+
+分组在 **JS 侧**完成，未使用 `$queryRaw`：
+
+1. 项目硬性约束是「数据库必须 Prisma 参数化，禁止拼接 SQL」
+2. 答辩演示包运行在 MariaDB 上，`CONVERT_TZ()` 依赖预加载的时区表，与 MySQL 行为可能不一致
+3. 订单量在百级，SQL 侧用 `@@index([createdAt])` 裁掉窗口外数据后再内存分组完全够用，且口径可读
+
+日期键使用**服务器本地时间**生成，**不可用 `toISOString()`**（那是 UTC，会跨日错位）。
+
+**尚未实现（本次范围外）**：卖家看板 `/api/dashboard/seller`、`/api/dashboard/seller/trend`
+（属卖家模块，需要时另开接口，届时也建议统一到 `/api/dashboard/*` 或 `/api/seller/*` 下）。
 
 ### 4.7 管理员 · `/api/v1/admin`
 
