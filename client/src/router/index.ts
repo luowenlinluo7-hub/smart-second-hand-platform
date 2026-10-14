@@ -11,7 +11,7 @@ const routes: RouteRecordRaw[] = [
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/DashboardView.vue'),
-    meta: { title: '数据看板' },
+    meta: { title: '数据看板', requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/products/:id',
@@ -99,6 +99,21 @@ router.beforeEach((to) => {
   // 需登录页面未登录 → 跳登录页并记住来源
   if (to.meta.requiresAuth && !token) {
     return { path: '/login', query: { redirect: to.fullPath } }
+  }
+
+  // 仅管理员可访问的页面：非管理员直接回首页，
+  // 避免先渲染页面再被接口的 403 踢回来（DashboardView 里仍保留了兜底处理）
+  if (to.meta.requiresAdmin) {
+    let role: string | null = null
+    try {
+      const raw = localStorage.getItem('user')
+      role = raw ? ((JSON.parse(raw) as { role?: string }).role ?? null) : null
+    } catch {
+      role = null
+    }
+    if (role !== 'ADMIN') {
+      return { path: '/' }
+    }
   }
 
   // 已登录访问登录 / 注册页 → 回首页

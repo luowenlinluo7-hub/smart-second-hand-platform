@@ -97,6 +97,59 @@ export interface ProductQuery {
   pageSize?: number
 }
 
+// ---------- 管理员数据看板 ----------
+
+// 核心指标卡
+export interface DashboardKpi {
+  userCount: number
+  productCount: number
+  orderCount: number
+  // 已付款订单总额，字符串保留两位小数
+  gmv: string
+  onSaleCount: number
+  pendingAuditCount: number
+}
+
+// GMV 趋势：三条等长数组，按日期对齐
+export interface DashboardTrend {
+  dates: string[]
+  gmv: string[]
+  orderCount: number[]
+}
+
+export interface DashboardOrderStatusItem {
+  status: OrderStatus
+  name: string
+  value: number
+}
+
+export interface DashboardCategoryItem {
+  name: string
+  value: number
+}
+
+export interface DashboardTopProduct {
+  productId: string
+  title: string
+  totalQuantity: number
+  totalAmount: string
+}
+
+export interface DashboardFulfillment {
+  // 付款到发货的平均小时数；无样本时为 null
+  avgHours: number | null
+  sampleCount: number
+}
+
+export interface DashboardData {
+  kpi: DashboardKpi
+  trend: DashboardTrend
+  orderStatus: DashboardOrderStatusItem[]
+  categoryShare: DashboardCategoryItem[]
+  topProducts: DashboardTopProduct[]
+  fulfillment: DashboardFulfillment
+}
+
 // ---------- AI 自然语言搜索 ----------
 
 // 条件来源：ai=真实模型 / mock=本地规则解析 / fallback=模型不可用后降级

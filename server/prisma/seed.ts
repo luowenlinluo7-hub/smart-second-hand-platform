@@ -233,9 +233,275 @@ const PRODUCTS: SeedProduct[] = [
   },
 ];
 
+// ============================================================
+// 历史成交数据：仅用于支撑数据看板，不参与前台展示
+// ------------------------------------------------------------
+// 为什么单独造一批商品：下单逻辑会把商品置为 SOLD，而上面 14 件商品是
+// 首页列表与 AI 搜索的演示依赖。若直接用它们下单，前台会变空。
+// 因此这里另造一批「已成交」商品，与订单一一对应。
+// ============================================================
+
+const HISTORY_PREFIX = '[历史]';
+
+interface SeedHistoryProduct {
+  id: string;
+  title: string;
+  description: string;
+  price: string;
+  originalPrice: string;
+  condition: SeedCondition;
+  categoryId: string;
+}
+
+// 50 件，价格从 18 元（二手教材）到 4999 元（MacBook Pro）拉开档次，
+// 保证「成交额 Top 5」有区分度，也让趋势图的每日成交额有真实波动
+const HISTORY_PRODUCTS: SeedHistoryProduct[] = [
+  { id: 'seed-hist-01', title: `${HISTORY_PREFIX} iPhone 12 64G 黑色`, description: '已成交，电池健康度 86%，无维修记录。', price: '2350.00', originalPrice: '5999.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-02', title: `${HISTORY_PREFIX} 华为 Mate 40 Pro 8+128`, description: '已成交，后盖有轻微使用痕迹。', price: '2980.00', originalPrice: '6499.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-03', title: `${HISTORY_PREFIX} 小米手环 7 NFC`, description: '已成交，配件齐全，功能正常。', price: '180.00', originalPrice: '399.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-04', title: `${HISTORY_PREFIX} 索尼 WH-1000XM4 头戴耳机`, description: '已成交，耳罩全新替换过。', price: '1180.00', originalPrice: '2899.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-05', title: `${HISTORY_PREFIX} MacBook Air M2 8G+256G`, description: '已成交，循环次数 92 次，原装充电器。', price: '4200.00', originalPrice: '9499.00', condition: 'LIKE_NEW', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-06', title: `${HISTORY_PREFIX} 联想小新 Air 14 锐龙版`, description: '已成交，屏幕有轻微亮点，不影响使用。', price: '1650.00', originalPrice: '4999.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-07', title: `${HISTORY_PREFIX} 罗技 K380 蓝牙键盘`, description: '已成交，按键手感正常。', price: '120.00', originalPrice: '249.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-08', title: `${HISTORY_PREFIX} 戴尔 27 英寸 2K 显示器`, description: '已成交，无坏点，含 HDMI 线。', price: '780.00', originalPrice: '1899.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-09', title: `${HISTORY_PREFIX} 惠普激光打印机 M17w`, description: '已成交，硒鼓剩余约一半。', price: '420.00', originalPrice: '1099.00', condition: 'FAIR', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-10', title: `${HISTORY_PREFIX} 美的变频空调 1.5 匹`, description: '已成交，安装使用两个夏季，制冷正常。', price: '1580.00', originalPrice: '3699.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-11', title: `${HISTORY_PREFIX} 九阳电磁炉`, description: '已成交，面板无划痕。', price: '95.00', originalPrice: '259.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-12', title: `${HISTORY_PREFIX} 飞利浦电动牙刷`, description: '已成交，刷头全新未拆封。', price: '80.00', originalPrice: '399.00', condition: 'NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-13', title: `${HISTORY_PREFIX} 海尔滚筒洗衣机 8kg`, description: '已成交，搬家出，运转平稳。', price: '1120.00', originalPrice: '2999.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-14', title: `${HISTORY_PREFIX} 松下空气净化器`, description: '已成交，滤网已更换。', price: '690.00', originalPrice: '1699.00', condition: 'LIKE_NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-15', title: `${HISTORY_PREFIX} 佳能 EOS M50 微单套机`, description: '已成交，快门数约 8000，含原装镜头。', price: '3150.00', originalPrice: '5999.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-16', title: `${HISTORY_PREFIX} 追觅扫地机器人`, description: '已成交，含备用边刷与滤芯。', price: '1340.00', originalPrice: '3299.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-17', title: `${HISTORY_PREFIX} iPad mini 6 64G`, description: '已成交，屏幕无划痕，附保护套。', price: '2180.00', originalPrice: '3799.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-18', title: `${HISTORY_PREFIX} 显示器增高支架`, description: '已成交，实木材质，带抽屉。', price: '150.00', originalPrice: '329.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-19', title: `${HISTORY_PREFIX} 中兴 5G 随身 WiFi`, description: '已成交，含原装数据线。', price: '260.00', originalPrice: '699.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-20', title: `${HISTORY_PREFIX} 苏泊尔电压力锅`, description: '已成交，内胆完好无涂层脱落。', price: '380.00', originalPrice: '899.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-21', title: `${HISTORY_PREFIX} 考研数学复习全书`, description: '已成交，二手教材，笔记整齐无破损。', price: '18.00', originalPrice: '68.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-22', title: `${HISTORY_PREFIX} 手机壳 全新未拆封`, description: '已成交，买错型号，未拆封。', price: '25.00', originalPrice: '49.00', condition: 'NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-23', title: `${HISTORY_PREFIX} USB 3.0 七口集线器`, description: '已成交，带独立供电，接口正常。', price: '35.00', originalPrice: '89.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-24', title: `${HISTORY_PREFIX} 机械键盘 有线 87 键`, description: '已成交，个别键帽有磨损，手感正常。', price: '45.00', originalPrice: '159.00', condition: 'FAIR', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-25', title: `${HISTORY_PREFIX} 无线鼠标 办公静音款`, description: '已成交，含 USB 接收器。', price: '58.00', originalPrice: '129.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-26', title: `${HISTORY_PREFIX} 护眼台灯 LED`, description: '已成交，三档色温可调。', price: '68.00', originalPrice: '199.00', condition: 'LIKE_NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-27', title: `${HISTORY_PREFIX} 电热水壶 1.5L 不锈钢`, description: '已成交，烧水正常无水垢。', price: '75.00', originalPrice: '199.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-28', title: `${HISTORY_PREFIX} 蓝牙音箱 便携防水`, description: '已成交，续航正常，音质尚可。', price: '95.00', originalPrice: '259.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-29', title: `${HISTORY_PREFIX} 华为手环 6 标准版`, description: '已成交，表带全新替换过。', price: '135.00', originalPrice: '349.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-30', title: `${HISTORY_PREFIX} 便携榨汁机 迷你`, description: '已成交，仅用过几次。', price: '145.00', originalPrice: '399.00', condition: 'LIKE_NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-31', title: `${HISTORY_PREFIX} 显示器增高架 实木带抽屉`, description: '已成交，收纳键盘刚好。', price: '158.00', originalPrice: '339.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-32', title: `${HISTORY_PREFIX} 飞利浦电动牙刷`, description: '已成交，刷头全新未拆封。', price: '188.00', originalPrice: '459.00', condition: 'NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-33', title: `${HISTORY_PREFIX} 加湿器 4L 静音`, description: '已成交，雾量正常，无漏水。', price: '210.00', originalPrice: '499.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-34', title: `${HISTORY_PREFIX} 移动硬盘 1TB USB3.2`, description: '已成交，通电时间短，健康度良好。', price: '235.00', originalPrice: '559.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-35', title: `${HISTORY_PREFIX} 空气炸锅 4L 无油`, description: '已成交，内胆不粘涂层完好。', price: '260.00', originalPrice: '699.00', condition: 'LIKE_NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-36', title: `${HISTORY_PREFIX} 迷你电饭煲 2L`, description: '已成交，适合单人使用。', price: '285.00', originalPrice: '759.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-37', title: `${HISTORY_PREFIX} 索尼 WH-CH520 头戴耳机`, description: '已成交，耳罩无脱皮。', price: '320.00', originalPrice: '799.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-38', title: `${HISTORY_PREFIX} 客制化机械键盘 68 键`, description: '已成交，自润轴体，含备用轴。', price: '420.00', originalPrice: '1099.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-39', title: `${HISTORY_PREFIX} 手持无线吸尘器`, description: '已成交，吸力正常，滤网已清洁。', price: '520.00', originalPrice: '1299.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-40', title: `${HISTORY_PREFIX} 松下空气净化器`, description: '已成交，滤网已更换。', price: '690.00', originalPrice: '1699.00', condition: 'LIKE_NEW', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-41', title: `${HISTORY_PREFIX} 佳能喷墨打印机 一体机`, description: '已成交，扫描复印正常，含墨盒。', price: '860.00', originalPrice: '2099.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-42', title: `${HISTORY_PREFIX} AirPods Pro 2 代`, description: '已成交，降噪正常，耳塞已换新。', price: '980.00', originalPrice: '1899.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-43', title: `${HISTORY_PREFIX} 扫地机器人 基础款`, description: '已成交，含备用边刷与滤芯。', price: '1080.00', originalPrice: '2599.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-44', title: `${HISTORY_PREFIX} iPad 9 代 64G`, description: '已成交，屏幕无划痕，附保护套。', price: '1250.00', originalPrice: '2499.00', condition: 'GOOD', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-45', title: `${HISTORY_PREFIX} 松下微波炉 23L`, description: '已成交，加热正常，转盘完好。', price: '1420.00', originalPrice: '3499.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-46', title: `${HISTORY_PREFIX} 戴森 V10 无线吸尘器`, description: '已成交，吸力强劲，含 5 个吸头。', price: '2480.00', originalPrice: '3999.00', condition: 'GOOD', categoryId: CATEGORY_APPLIANCE },
+  { id: 'seed-hist-47', title: `${HISTORY_PREFIX} 戴尔游匣 G15 游戏本 5511`, description: '已成交，A 面有细划痕，性能正常。', price: '3380.00', originalPrice: '8999.00', condition: 'GOOD', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-48', title: `${HISTORY_PREFIX} iPhone 13 128G 蓝色`, description: '已成交，电池健康度 89%，无维修。', price: '3520.00', originalPrice: '5999.00', condition: 'LIKE_NEW', categoryId: CATEGORY_PHONE },
+  { id: 'seed-hist-49', title: `${HISTORY_PREFIX} ThinkPad X1 Carbon 2021`, description: '已成交，外壳有磕碰，已重装系统。', price: '3680.00', originalPrice: '12999.00', condition: 'FAIR', categoryId: CATEGORY_COMPUTER },
+  { id: 'seed-hist-50', title: `${HISTORY_PREFIX} MacBook Pro 14 M1 Pro`, description: '已成交，循环充电 156 次，原装充电器。', price: '4999.00', originalPrice: '15999.00', condition: 'LIKE_NEW', categoryId: CATEGORY_COMPUTER },
+];
+
+// 历史商品图片：按索引轮转占位图，避免所有商品长得一样
+const histImg = (index: number): string[] =>
+  Array.from(
+    { length: 2 },
+    (_, i) => `/demo/p${((index * 2 + i) % DEMO_IMAGE_COUNT) + 1}.jpg`,
+  );
+
+// ============================================================
+// 历史订单：覆盖全部 6 种状态，时间分布在过去 30 天内
+// ------------------------------------------------------------
+// daysAgo 的分配依据「状态需要多长时间才可能达成」：
+//   已评价 需要 付款→发货→收货→评价 全流程，故放在 3 天前之后
+//   已完成 需要 付款→发货→收货，放在 3 天前之后
+//   已发货 需要 付款→发货，2 天前即可
+//   待付款 / 已取消 不依赖履约流程，可以就在今天
+// 这样保证所有时间戳都落在「过去」，不会出现未来时间。
+// ============================================================
+
+// ============================================================
+// 历史订单：按「30 天非均匀分布」生成，覆盖全部 6 种状态
+// ------------------------------------------------------------
+// 为什么写死一组起伏数组而不是用随机数：
+//   随机数每次 seed 结果都不一样，看图时无法复现，也不好解释；
+//   写死数组能精确控制「有空单日、有爆单日」，趋势图看起来才像真实业务。
+// ============================================================
+
+type SeedOrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PENDING_SHIPMENT'
+  | 'SHIPPED'
+  | 'COMPLETED'
+  | 'REVIEWED'
+  | 'CANCELLED';
+
+interface SeedHistoryOrder {
+  id: string;
+  daysAgo: number;
+  // 下单时间在建单时就确定，避免订单与评价两处各自推算导致时间对不上
+  createdAt: Date;
+  status: SeedOrderStatus;
+  productId: string;
+  buyerId: string;
+  receiverName: string;
+  receiverPhone: string;
+  // 仅 REVIEWED 需要
+  rating?: number;
+  reviewContent?: string;
+  reviewImages?: string[];
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+// 相对当前时间计算，保证无论哪天执行 seed，趋势图都有数据
+const hoursAgo = (hours: number): Date => new Date(Date.now() - Math.round(hours) * HOUR_MS);
+
+// 30 天的订单量分布，下标 = 距今天数（0 = 今天）。
+// 合计 50 单：有空单日（第 4、8、14、19、22、26 天），也有爆单日（第 3 天 5 单）。
+const DAY_ORDER_COUNTS: readonly number[] = [
+  3, 1, 4, 5, 0, 2, 3, // 近 7 天，共 18 单
+  1, 3, 0, 2, 3, 1, 2, // 7~13 天前，共 12 单
+  0, 2, 1, 3, 1, 0, 2, // 14~20 天前，共 9 单
+  1, 0, 2, 1, 3, 0, 1, // 21~27 天前，共 8 单
+  2, 1, // 28~29 天前，共 3 单
+];
+
+// 状态与「距今天数」强相关：今天不可能已发货，越早的订单越可能走完全流程。
+// 这样各状态的时间戳都落在过去，不会出现未来时间。
+const pickStatus = (daysAgo: number, seqInDay: number): SeedOrderStatus => {
+  if (daysAgo === 0) return seqInDay % 3 === 2 ? 'CANCELLED' : 'PENDING_PAYMENT';
+  if (daysAgo === 1) {
+    return (['PENDING_SHIPMENT', 'CANCELLED', 'PENDING_PAYMENT'] as const)[seqInDay % 3];
+  }
+  if (daysAgo === 2) {
+    return (['PENDING_SHIPMENT', 'SHIPPED'] as const)[seqInDay % 2];
+  }
+  if (daysAgo <= 6) {
+    return (['SHIPPED', 'COMPLETED', 'REVIEWED'] as const)[seqInDay % 3];
+  }
+  // 更早的订单基本都已评价，少数只完成未评价
+  return seqInDay % 4 === 3 ? 'COMPLETED' : 'REVIEWED';
+};
+
+const REVIEW_TEXTS: readonly string[] = [
+  '成色和描述一致，卖家包装很用心，开机一切正常。',
+  '实物比图片好看，沟通顺畅，发货很快。',
+  '功能都正常，价格合适，就是外观痕迹比想象中明显一点。',
+  '用了两周没出问题，性价比不错。',
+  '卖家回复及时，配件齐全，整体满意。',
+  '符合这个价格，凑合用没问题。',
+];
+
+// 按下单时间从近到远生成订单。
+// 二手商品单件交易，售出即 SOLD，因此每个商品只被一单消费。
+const buildHistoryOrders = (): SeedHistoryOrder[] => {
+  const orders: SeedHistoryOrder[] = [];
+
+  for (const [daysAgo, count] of DAY_ORDER_COUNTS.entries()) {
+    for (let seqInDay = 0; seqInDay < count; seqInDay += 1) {
+      const index = orders.length;
+      // 用与商品总数互质的步长取商品，让相邻订单的金额高低交错，
+      // 而不是随价格单调递增
+      const productNo = ((index * 17) % HISTORY_PRODUCTS.length) + 1;
+      const buyerIsFirst = index % 2 === 0;
+      const status = pickStatus(daysAgo, seqInDay);
+
+      orders.push({
+        id: `seed-order-${String(index + 1).padStart(2, '0')}`,
+        daysAgo,
+        // 同一天内的订单错开几个小时，避免全部挤在同一时刻
+        createdAt: hoursAgo(daysAgo * 24 + 6 + (index % 7)),
+        status,
+        productId: `seed-hist-${String(productNo).padStart(2, '0')}`,
+        buyerId: buyerIsFirst ? 'seed-user-01' : 'seed-user-02',
+        receiverName: buyerIsFirst ? '张三' : '王五',
+        receiverPhone: buyerIsFirst ? '13800138001' : '13800138002',
+        ...(status === 'REVIEWED'
+          ? {
+              rating: 3 + ((index + daysAgo) % 3),
+              reviewContent: REVIEW_TEXTS[index % REVIEW_TEXTS.length],
+              reviewImages:
+                index % 3 === 0 ? [`/demo/p${(index % DEMO_IMAGE_COUNT) + 1}.jpg`] : [],
+            }
+          : {}),
+      });
+    }
+  }
+
+  return orders;
+};
+
+const HISTORY_ORDERS: SeedHistoryOrder[] = buildHistoryOrders();
+
+// 订单号按「下单时间 + 序号」生成，保持与真实格式一致且唯一
+const buildOrderNo = (createdAt: Date, index: number): string => {
+  const pad = (n: number, len = 2): string => String(n).padStart(len, '0');
+  const ts = `${createdAt.getFullYear()}${pad(createdAt.getMonth() + 1)}${pad(createdAt.getDate())}${pad(createdAt.getHours())}${pad(createdAt.getMinutes())}${pad(createdAt.getSeconds())}`;
+  return `${ts}${pad(index, 4)}`;
+};
+
+// 根据状态推导各时间戳，保证流程顺序合法且都落在过去
+const buildTimestamps = (
+  status: SeedOrderStatus,
+  createdAt: Date,
+  index: number,
+): {
+  paidAt: Date | null;
+  shippedAt: Date | null;
+  completedAt: Date | null;
+  reviewedAt: Date | null;
+  cancelledAt: Date | null;
+} => {
+  const empty = {
+    paidAt: null,
+    shippedAt: null,
+    completedAt: null,
+    reviewedAt: null,
+    cancelledAt: null,
+  };
+
+  if (status === 'PENDING_PAYMENT') return empty;
+
+  if (status === 'CANCELLED') {
+    return { ...empty, cancelledAt: new Date(createdAt.getTime() + (1 + (index % 5)) * HOUR_MS) };
+  }
+
+  // 其余状态都已付款
+  const paidAt = new Date(createdAt.getTime() + 0.5 * HOUR_MS);
+  // 履约时长 20~36 小时，让「平均履约时长」有真实波动
+  const shipDelayHours = 20 + (index % 5) * 4;
+  const shippedAt = new Date(paidAt.getTime() + shipDelayHours * HOUR_MS);
+
+  if (status === 'PENDING_SHIPMENT') {
+    return { ...empty, paidAt };
+  }
+  if (status === 'SHIPPED') {
+    return { ...empty, paidAt, shippedAt };
+  }
+
+  const completedAt = new Date(shippedAt.getTime() + 22 * HOUR_MS);
+  if (status === 'COMPLETED') {
+    return { ...empty, paidAt, shippedAt, completedAt };
+  }
+
+  return {
+    ...empty,
+    paidAt,
+    shippedAt,
+    completedAt,
+    reviewedAt: new Date(completedAt.getTime() + 5 * HOUR_MS),
+  };
+};
+
 async function main(): Promise<void> {
   console.log('[seed] 开始灌入演示数据...');
-
   // ---------- 1. 用户：1 管理员 + 1 卖家 + 2 普通用户 ----------
   // 密码全部经 bcryptjs 哈希后入库，禁止明文
   const [adminHash, sellerHash, userHash] = await Promise.all([
@@ -331,10 +597,143 @@ async function main(): Promise<void> {
     );
   }
 
+  // ---------- 4. 历史成交商品：状态直接置为 SOLD，不参与前台展示 ----------
+  // 前台列表与 AI 搜索都按 status=ON_SALE 过滤，因此 SOLD 天然不会出现
+  const historyProducts = new Map<string, { title: string; price: string; image: string }>();
+
+  for (const [index, p] of HISTORY_PRODUCTS.entries()) {
+    const images = histImg(index);
+    const data = {
+      title: p.title,
+      description: p.description,
+      price: p.price,
+      originalPrice: p.originalPrice,
+      images,
+      condition: p.condition,
+      status: 'SOLD' as const,
+      stock: 1,
+      viewCount: 60 + index * 17,
+      favoriteCount: 10 + index * 3,
+      publishedAt: hoursAgo(24 * 40 + index),
+      sellerId: seller.id,
+      categoryId: p.categoryId,
+    };
+
+    await prisma.product.upsert({
+      where: { id: p.id },
+      update: data,
+      create: { id: p.id, ...data },
+    });
+
+    historyProducts.set(p.id, { title: p.title, price: p.price, image: images[0] });
+  }
+
+  // ---------- 5. 历史订单：覆盖全部状态，支撑看板的趋势与分布 ----------
+  let reviewCount = 0;
+
+  for (const [index, o] of HISTORY_ORDERS.entries()) {
+    const product = historyProducts.get(o.productId);
+    if (!product) {
+      throw new Error(`[seed] 订单 ${o.id} 引用了不存在的历史商品 ${o.productId}`);
+    }
+
+    // 下单时间已在生成时确定，订单与评价共用同一个值，避免两处推算导致时间对不上
+    const createdAt = o.createdAt;
+    const stamps = buildTimestamps(o.status, createdAt, index);
+
+    const orderData = {
+      orderNo: buildOrderNo(createdAt, index + 1),
+      buyerId: o.buyerId,
+      sellerId: seller.id,
+      totalAmount: product.price,
+      status: o.status,
+      receiverName: o.receiverName,
+      receiverPhone: o.receiverPhone,
+      receiverAddress: '北京市海淀区中关村大街 1 号 演示地址',
+      remark: null,
+      ...stamps,
+      createdAt,
+    };
+
+    // 明细用 deleteMany + create 重建，保证重复执行 seed 时不会因
+    // @@unique([orderId, productId]) 冲突而失败
+    const itemData = {
+      productId: o.productId,
+      title: product.title,
+      image: product.image,
+      price: product.price,
+      quantity: 1,
+      subtotal: product.price,
+      status:
+        o.status === 'SHIPPED' || o.status === 'COMPLETED' || o.status === 'REVIEWED'
+          ? ('SHIPPED' as const)
+          : o.status === 'CANCELLED'
+            ? ('CANCELLED' as const)
+            : ('PENDING' as const),
+      createdAt,
+    };
+
+    await prisma.order.upsert({
+      where: { id: o.id },
+      update: { ...orderData, items: { deleteMany: {}, create: [itemData] } },
+      create: { id: o.id, ...orderData, items: { create: [itemData] } },
+    });
+  }
+
+  // ---------- 6. 评价：仅已评价订单 ----------
+  // 先按订单前缀清掉旧的种子评价再重建。
+  // 不能只用 upsert：评价的唯一键是 (orderId, productId, reviewerId)，
+  // 而订单与商品的配对关系每次生成都可能变，旧配对会变成孤儿数据。
+  await prisma.review.deleteMany({ where: { orderId: { startsWith: 'seed-order-' } } });
+
+  for (const [index, o] of HISTORY_ORDERS.entries()) {
+    if (o.status !== 'REVIEWED' || !o.rating) continue;
+
+    const product = historyProducts.get(o.productId);
+    if (!product) continue;
+
+    // 复用订单同一套时间戳推导，保证评价时间不晚于现在、也不早于下单
+    const stamps = buildTimestamps(o.status, o.createdAt, index);
+
+    await prisma.review.create({
+      data: {
+        orderId: o.id,
+        productId: o.productId,
+        reviewerId: o.buyerId,
+        revieweeId: seller.id,
+        rating: o.rating,
+        content: o.reviewContent ?? null,
+        images: o.reviewImages ?? [],
+        status: 'VISIBLE',
+        ...(stamps.reviewedAt ? { createdAt: stamps.reviewedAt } : {}),
+      },
+    });
+    reviewCount += 1;
+  }
+
+  // ---------- 7. 清理陈旧种子数据 ----------
+  // 订单/商品数量将来若调整（比如从 20 条扩到 50 条），旧 id 会残留在库里。
+  // 这里只删「seed- 前缀但已不在当前生成集合里」的记录，绝不触碰其他数据。
+  const currentOrderIds = HISTORY_ORDERS.map((o) => o.id);
+  const currentProductIds = HISTORY_PRODUCTS.map((p) => p.id);
+  const staleOrders = await prisma.order.deleteMany({
+    where: { id: { startsWith: 'seed-order-' }, NOT: { id: { in: currentOrderIds } } },
+  });
+  const staleProducts = await prisma.product.deleteMany({
+    where: { id: { startsWith: 'seed-hist-' }, NOT: { id: { in: currentProductIds } } },
+  });
+  if (staleOrders.count > 0 || staleProducts.count > 0) {
+    console.log(
+      `[seed] 已清理陈旧种子数据：订单 ${staleOrders.count} 条、商品 ${staleProducts.count} 件`,
+    );
+  }
+
   console.log('[seed] 完成：');
   console.log(`  用户    ${1 + 1 + buyers.length} 个（管理员 ${admin.username} / 卖家 ${seller.username} / 买家 ${buyers.map((b) => b.username).join('、')}）`);
   console.log(`  分类    ${categories.length} 个（${categories.map((c) => c.name).join('、')}）`);
-  console.log(`  商品    ${products.length} 个（全部 ON_SALE，归属 ${seller.username}）`);
+  console.log(`  商品    ${products.length} 个在售 + ${historyProducts.size} 个历史成交（SOLD，不参与前台）`);
+  console.log(`  订单    ${HISTORY_ORDERS.length} 条（覆盖全部状态，时间分布在近 30 天，供数据看板使用）`);
+  console.log(`  评价    ${reviewCount} 条（来自已评价订单）`);
   console.log('[seed] 演示密码：admin=Admin@123456  seller_li=Seller@123456  user_*=User@123456');
 }
 

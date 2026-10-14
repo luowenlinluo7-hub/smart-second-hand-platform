@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import * as dashboardService from '../services/dashboard.service';
 import * as productService from '../services/product.service';
 import { success } from '../utils/response';
 
@@ -11,6 +12,11 @@ const adminListQuerySchema = z.object({
     .optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// 看板趋势窗口：默认近 7 天，上限 90 天防止一次拉太多数据
+const dashboardQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(7),
 });
 
 // 审核：approve=true 通过；approve=false 驳回且 rejectReason 必填
@@ -25,6 +31,13 @@ const auditSchema = z
   });
 
 // ---------- 控制器 ----------
+
+// GET /api/admin/dashboard —— 管理员数据看板（聚合指标全部来自真实数据库）
+export const dashboard = async (req: Request, res: Response): Promise<void> => {
+  const query = dashboardQuerySchema.parse(req.query);
+  const data = await dashboardService.getDashboard(query.days);
+  res.json(success(data));
+};
 
 // GET /api/admin/products（审核队列，可选按 status 过滤）
 export const listProducts = async (req: Request, res: Response): Promise<void> => {
