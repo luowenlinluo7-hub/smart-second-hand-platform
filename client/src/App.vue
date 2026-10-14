@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
+import AiAssistant from '@/components/AiAssistant.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -72,6 +73,9 @@ const handleLogout = (): void => {
     <el-main>
       <RouterView />
     </el-main>
+
+    <!-- 全局 AI 导购助手：挂在布局层，因此切换页面时对话记录不会丢失 -->
+    <AiAssistant />
   </el-container>
 </template>
 

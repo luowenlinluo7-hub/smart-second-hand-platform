@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getProducts } from '@/api/product'
 import { getCategories } from '@/api/category'
-import type { Category, Product, ProductCondition } from '@/types/api'
+import { searchByAi } from '@/api/ai'
+import type { AiSearchResult, Category, Product, ProductCondition } from '@/types/api'
 
 const router = useRouter()
 
@@ -31,8 +32,44 @@ const conditionLabels: Record<ProductCondition, string> = {
   FAIR: '明显使用痕迹',
 }
 
+// AI 搜索状态：aiResult 非空时说明当前列表来自 AI 搜索，而不是手动筛选
+const aiQuery = ref('')
+const aiLoading = ref(false)
+const aiResult = ref<AiSearchResult | null>(null)
+
+// 条件来源的中文说明，让用户知道这次是模型解析还是降级/本地规则
+const aiSourceText = computed<string>(() => {
+  switch (aiResult.value?.source) {
+    case 'ai':
+      return 'AI 解析'
+    case 'mock':
+      return '本地规则解析'
+    case 'fallback':
+      return '已降级为关键词匹配'
+    default:
+      return ''
+  }
+})
+
+// 是否至少解析出了一个条件，用于决定要不要显示「未识别出具体条件」
+const hasParsedFilters = computed<boolean>(() => {
+  const parsed = aiResult.value?.parsed
+  if (!parsed) {
+    return false
+  }
+  return Boolean(
+    parsed.category ||
+      parsed.condition ||
+      parsed.priceMin !== null ||
+      parsed.priceMax !== null ||
+      parsed.keyword,
+  )
+})
+
 const fetchProducts = async (): Promise<void> => {
   loading.value = true
+  // 手动筛选会覆盖 AI 结果，先把解析标签清掉，避免展示与实际列表不一致
+  aiResult.value = null
   try {
     const result = await getProducts({
       keyword: filters.keyword || undefined,
@@ -52,6 +89,43 @@ const fetchProducts = async (): Promise<void> => {
   }
 }
 
+// AI 搜索：分页时复用同一句话重新查询
+const runAiSearch = async (targetPage: number): Promise<void> => {
+  aiLoading.value = true
+  try {
+    const result = await searchByAi({
+      query: aiQuery.value.trim(),
+      page: targetPage,
+      pageSize: pageSize.value,
+    })
+    aiResult.value = result
+    products.value = result.list
+    total.value = result.total
+    page.value = targetPage
+    if (targetPage === 1 && result.total === 0) {
+      ElMessage.info('没有找到匹配的商品，换个说法试试')
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'AI 搜索失败')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+const onAiSearch = (): void => {
+  if (!aiQuery.value.trim()) {
+    ElMessage.warning('请输入搜索内容')
+    return
+  }
+  // AI 搜索与手动筛选是两条独立路径，先清空手动条件避免两套条件互相干扰
+  filters.keyword = ''
+  filters.categoryId = ''
+  filters.condition = ''
+  filters.priceMin = undefined
+  filters.priceMax = undefined
+  runAiSearch(1)
+}
+
 // 搜索：重置到第一页
 const onSearch = (): void => {
   page.value = 1
@@ -64,11 +138,18 @@ const onReset = (): void => {
   filters.condition = ''
   filters.priceMin = undefined
   filters.priceMax = undefined
+  aiQuery.value = ''
+  aiResult.value = null
   onSearch()
 }
 
 const onPageChange = (p: number): void => {
   page.value = p
+  // AI 结果分页要带着原句重查，否则翻页会掉回手动筛选
+  if (aiResult.value) {
+    runAiSearch(p)
+    return
+  }
   fetchProducts()
 }
 
@@ -88,6 +169,58 @@ onMounted(async () => {
 
 <template>
   <div class="product-page">
+    <!-- AI 自然语言搜索 -->
+    <el-card shadow="never" class="ai-card">
+      <div class="ai-bar">
+        <el-input
+          v-model="aiQuery"
+          size="large"
+          clearable
+          placeholder="用一句话说出你的需求，例如：九成新 2000 以内的游戏本"
+          @keyup.enter="onAiSearch"
+        >
+          <template #prefix>
+            <span class="ai-badge">AI</span>
+          </template>
+        </el-input>
+        <el-button type="primary" size="large" :loading="aiLoading" @click="onAiSearch">
+          智能搜索
+        </el-button>
+      </div>
+
+      <!-- 解析结果：让用户看到 AI 到底理解了哪些条件 -->
+      <div v-if="aiResult" class="ai-parsed">
+        <span class="ai-parsed-label">已识别：</span>
+        <el-tag v-if="aiResult.parsed.category" type="primary" effect="light">
+          品类 {{ aiResult.parsed.category.name }}
+        </el-tag>
+        <el-tag v-if="aiResult.parsed.conditionLabel" type="success" effect="light">
+          成色 {{ aiResult.parsed.conditionLabel }}
+        </el-tag>
+        <el-tag v-if="aiResult.parsed.priceMax !== null" type="warning" effect="light">
+          预算 ≤ ¥{{ aiResult.parsed.priceMax }}
+        </el-tag>
+        <el-tag v-if="aiResult.parsed.priceMin !== null" type="warning" effect="light">
+          价格 ≥ ¥{{ aiResult.parsed.priceMin }}
+        </el-tag>
+        <el-tag v-if="aiResult.parsed.keyword" type="info" effect="light">
+          关键词 {{ aiResult.parsed.keyword }}
+        </el-tag>
+        <el-tag v-if="!hasParsedFilters" type="info" effect="plain">未识别出具体条件</el-tag>
+        <el-tag size="small" effect="plain" class="ai-source">{{ aiSourceText }}</el-tag>
+      </div>
+
+      <!-- 条件过严被放宽时的提示 -->
+      <el-alert
+        v-if="aiResult?.relaxedNote"
+        :title="aiResult.relaxedNote"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="ai-alert"
+      />
+    </el-card>
+
     <!-- 筛选栏 -->
     <el-card shadow="never" class="filter-card">
       <div class="filter-bar">
@@ -182,6 +315,49 @@ onMounted(async () => {
 
 .filter-card {
   margin-bottom: 16px;
+}
+
+.ai-card {
+  margin-bottom: 16px;
+}
+
+.ai-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ai-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--el-color-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.5px;
+}
+
+.ai-parsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.ai-parsed-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.ai-source {
+  margin-left: auto;
+}
+
+.ai-alert {
+  margin-top: 16px;
 }
 
 .filter-bar {

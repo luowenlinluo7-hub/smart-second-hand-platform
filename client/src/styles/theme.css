@@ -1,0 +1,44 @@
+/* ============================================================
+   品牌主题 · 唯一入口
+   ------------------------------------------------------------
+   必须在 main.ts 中「最后」引入，顺序为：
+     element-plus/dist/index.css  →  style.css  →  theme.css
+   这样这里的变量才能覆盖 Element Plus 默认值。
+
+   本次只落地「颜色 token」。圆角、阴影、字体按项目规范属
+   UI 统一优化阶段的工作，此处不动，避免影响其他页面布局。
+   ============================================================ */
+
+:root {
+  /* ---------- 主色：暖橙 #ff6b35 ---------- */
+  --el-color-primary: #ff6b35;
+
+  /* EP 的色阶是主色与白色的混合，逐级变浅，用于 hover / 禁用 / 浅底 tag */
+  --el-color-primary-light-3: #ff9772;
+  --el-color-primary-light-5: #ffb59a;
+  --el-color-primary-light-7: #ffd3c2;
+  --el-color-primary-light-8: #ffe1d7;
+  --el-color-primary-light-9: #fff0eb;
+  /* 深一档，用于 hover 加深与 active */
+  --el-color-primary-dark-2: #cc562a;
+
+  /* ---------- 背景：暖白 #faf9f7（避免纯白 #ffffff 的冷硬感） ---------- */
+  --el-bg-color: #faf9f7;
+  /* 浮层（dialog / drawer / dropdown / popover）的衍生变量，
+     不覆盖的话这些组件仍会渲染成纯白 */
+  --el-bg-color-overlay: #faf9f7;
+  --el-bg-color-page: #faf9f7;
+
+  /* ---------- 文字：深灰三级 ---------- */
+  --el-text-color-primary: #1a1a1a;
+  --el-text-color-regular: #666666;
+  --el-text-color-secondary: #999999;
+}
+
+/* 页面底色。
+   style.css 里写的是 Element Plus 默认的 #f5f7fa，
+   这里统一改用暖白，保证 theme.css 是唯一主题入口。 */
+body {
+  background-color: var(--el-bg-color);
+  color: var(--el-text-color-primary);
+}

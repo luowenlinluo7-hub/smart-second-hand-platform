@@ -3,6 +3,7 @@ import { ProductStatus } from '@prisma/client';
 import type { Prisma, ProductCondition } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/ApiError';
+import { buildCandidateWhere, CANDIDATE_LIMIT, isWeakResult, rankProducts } from './productRank';
 
 // 详情 / 列表出参：包含卖家与分类的嵌套信息
 const productInclude = {
@@ -121,6 +122,107 @@ export const listProducts = async (query: ProductListQuery): Promise<ProductList
   ]);
 
   return { list: rows.map(formatProduct), total, page: query.page, pageSize: query.pageSize };
+};
+
+// 带相关性排序的检索：AI 搜索与 AI 助手都走这条路径。
+// 与 listProducts 的区别是排序不再按时间，而是按「内容相关性 → 热度 → 时间」，
+// 并且能识别出「结果较弱」，让上层有机会提示用户放宽条件。
+export interface RankedSearchQuery extends ProductListQuery {
+  // 需要排除的商品（如已推荐过的，避免反复推同一件）
+  excludeIds?: string[];
+}
+
+export interface RankedSearchResult extends ProductListResult {
+  // 结果是否偏弱（命中很少或分数很低），供上层提示
+  weak: boolean;
+}
+
+export const searchProductsRanked = async (
+  query: RankedSearchQuery,
+): Promise<RankedSearchResult> => {
+  const where: Prisma.ProductWhereInput = { status: 'ON_SALE' };
+
+  if (query.categoryId) {
+    where.categoryId = query.categoryId;
+  }
+  if (query.condition) {
+    where.condition = query.condition;
+  }
+  if (query.priceMin !== undefined || query.priceMax !== undefined) {
+    where.price = {
+      ...(query.priceMin !== undefined ? { gte: query.priceMin } : {}),
+      ...(query.priceMax !== undefined ? { lte: query.priceMax } : {}),
+    };
+  }
+  if (query.excludeIds && query.excludeIds.length > 0) {
+    where.id = { notIn: query.excludeIds };
+  }
+
+  const keywordWhere = query.keyword ? buildCandidateWhere(query.keyword) : null;
+  if (keywordWhere) {
+    // 用 AND 包住关键词 OR 组，避免和外层条件互相覆盖
+    where.AND = [keywordWhere];
+  }
+
+  const candidates = await prisma.product.findMany({
+    where,
+    include: productInclude,
+    orderBy: { createdAt: 'desc' },
+    take: CANDIDATE_LIMIT,
+  });
+
+  const ranked = rankProducts(candidates, query.keyword ?? '');
+  const list = ranked.map((item) => formatProduct(item.product));
+
+  // 候选集已在内存里排好序，直接切片即可
+  const start = (query.page - 1) * query.pageSize;
+  return {
+    list: list.slice(start, start + query.pageSize),
+    total: list.length,
+    page: query.page,
+    pageSize: query.pageSize,
+    weak: isWeakResult(ranked),
+  };
+};
+
+// ---------- 供 AI 助手使用的读取能力 ----------
+
+// 读取「用户正在关注的商品」。刻意不增加 viewCount ——
+// 用户只是问一句「这件成色怎么样」，不该把浏览量算进去。
+export const findProductById = async (id: string): Promise<ProductDTO | null> => {
+  const row = await prisma.product.findFirst({
+    where: { id, status: 'ON_SALE' },
+    include: productInclude,
+  });
+  return row ? formatProduct(row) : null;
+};
+
+// 同类在售商品的均价，用于回答「和同类比价格贵吗」
+export const averagePriceOfCategory = async (
+  categoryId: string,
+  excludeId: string,
+): Promise<number | null> => {
+  const aggregated = await prisma.product.aggregate({
+    where: { categoryId, status: 'ON_SALE', id: { not: excludeId } },
+    _avg: { price: true },
+  });
+  const average = aggregated._avg.price;
+  return average === null ? null : Number(average);
+};
+
+// 某卖家除当前商品外的其他在售商品，用于回答「卖家还卖什么」
+export const listSellerOtherProducts = async (
+  sellerId: string,
+  excludeId: string,
+  take: number,
+): Promise<ProductDTO[]> => {
+  const rows = await prisma.product.findMany({
+    where: { sellerId, status: 'ON_SALE', id: { not: excludeId } },
+    include: productInclude,
+    orderBy: { createdAt: 'desc' },
+    take,
+  });
+  return rows.map(formatProduct);
 };
 
 // 卖家「我的商品」：返回该卖家全部状态的商品（含草稿 / 待审核 / 驳回），
