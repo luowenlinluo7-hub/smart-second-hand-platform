@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getProduct } from '@/api/product'
+import { useAiChatStore } from '@/stores/aiChat'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import type { Product, ProductCondition } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
+const aiChat = useAiChatStore()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
 
@@ -63,8 +65,16 @@ const buyNow = (): void => {
   router.push('/cart')
 }
 
+// 打开 AI 助手并让它知道用户正在看这件商品，
+// 这样「这件成色怎么样」里的「这件」才能被正确消解
+const askAi = (): void => {
+  aiChat.open()
+}
+
 onMounted(async () => {
   loading.value = true
+  // 先把关注商品告诉助手，用户此时问「这件成色怎么样」才有意义
+  aiChat.setFocusProduct(String(route.params.id))
   try {
     product.value = await getProduct(String(route.params.id))
   } catch (error) {
@@ -72,6 +82,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+// 离开详情页就清掉关注点，避免在别的页面问「这件」时指向已经过期的商品
+onUnmounted(() => {
+  aiChat.setFocusProduct(null)
 })
 </script>
 
@@ -129,6 +144,7 @@ onMounted(async () => {
                 立即购买
               </el-button>
               <el-tag v-else type="info" size="large">该商品已售出或已下架</el-tag>
+              <el-button plain @click="askAi">问 AI 这件商品的细节</el-button>
             </div>
           </el-col>
         </el-row>
