@@ -67,17 +67,28 @@ watch(
 </script>
 
 <template>
-  <!-- 悬浮入口：右下角圆形按钮，带呼吸灯 -->
-  <button
-    v-show="!chat.drawerOpen"
-    class="ai-fab"
-    type="button"
-    title="AI 导购助手"
-    @click="chat.open()"
-  >
-    <span class="ai-fab-icon">AI</span>
-    <span class="ai-fab-text">导购助手</span>
-  </button>
+  <!-- 悬浮入口
+       外层 anchor 只承担「一次性入场动画」，内层 button 承担 hover ——
+       两者都要改 transform，分成两层才能避免 animation 把 hover 的位移覆盖掉 -->
+  <div v-show="!chat.drawerOpen" class="ai-fab-anchor">
+    <el-tooltip content="AI 导购助手" placement="left" :show-after="200">
+      <button
+        class="ai-fab"
+        type="button"
+        :aria-label="chat.unreadCount > 0 ? 'AI 导购助手（有新回复）' : 'AI 导购助手'"
+        @click="chat.open()"
+      >
+        <!-- 星芒图标：AI 的通用符号。不用聊天气泡 —— 那个语义是「转人工客服」 -->
+        <svg class="ai-fab-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M10.5 1 Q12.7 6.8 18.5 9 Q12.7 11.2 10.5 17 Q8.3 11.2 2.5 9 Q8.3 6.8 10.5 1 Z
+               M19 15.5 Q20 18 22.5 19 Q20 20 19 22.5 Q18 20 15.5 19 Q18 18 19 15.5 Z"
+          />
+        </svg>
+        <span v-if="chat.unreadCount > 0" class="ai-fab-dot" aria-hidden="true" />
+      </button>
+    </el-tooltip>
+  </div>
 
   <el-drawer
     v-model="chat.drawerOpen"
@@ -257,44 +268,111 @@ watch(
 </template>
 
 <style scoped>
-.ai-fab {
+/* 外层锚点：只负责一次性入场动画 */
+.ai-fab-anchor {
   position: fixed;
   right: 24px;
-  bottom: 32px;
+  bottom: 24px;
   z-index: 2000;
+  /* 用 both 保证动画结束后停在终态；这里改的是外层，不影响内层 button 的 hover */
+  animation: ai-fab-enter 250ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+
+@keyframes ai-fab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-fab {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
   border: none;
-  border-radius: 24px;
+  border-radius: 50%;
   background: var(--el-color-primary);
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 0 rgba(255, 107, 53, 0.5);
-  animation: ai-breathe 2.4s ease-out infinite;
+  /* 基础阴影保持静态；hover 时用伪元素叠一层更深的，
+     这样只需要过渡 opacity，不触发布局或重绘 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* 加深的阴影单独一层，只切 opacity —— 纯合成层变化，稳定 60fps */
+.ai-fab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .ai-fab:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 0 rgba(255, 107, 53, 0.5);
+  transform: translateY(-2px);
+}
+
+.ai-fab:hover::after {
+  opacity: 1;
+}
+
+.ai-fab:active {
+  transform: translateY(0);
+}
+
+/* 键盘可达：只对 focus-visible 显示焦点环，鼠标点击不会出现 */
+.ai-fab:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 3px;
 }
 
 .ai-fab-icon {
-  font-size: 15px;
-  letter-spacing: 0.5px;
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
 }
 
-@keyframes ai-breathe {
-  0% {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 0 rgba(255, 107, 53, 0.45);
+/* 未读红点：右上角并略微向外偏移（圆的包围盒四角在圆形之外），
+   加一圈描边保证压在圆面上也能辨认 */
+.ai-fab-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--el-color-danger);
+  box-shadow: 0 0 0 2px var(--el-bg-color);
+}
+
+/* 尊重系统的「减弱动效」偏好（WCAG 2.3.3） */
+@media (prefers-reduced-motion: reduce) {
+  .ai-fab-anchor {
+    animation: none;
   }
-  70% {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 12px rgba(255, 107, 53, 0);
+
+  .ai-fab,
+  .ai-fab::after {
+    transition: none;
   }
-  100% {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 0 rgba(255, 107, 53, 0);
+
+  /* 生成中的光标与思考指示属于「进行中」反馈，
+     关闭闪烁后仍有静态标记，不影响判断是否还在生成 */
+  .ai-caret,
+  .ai-dot {
+    animation: none;
   }
 }
 

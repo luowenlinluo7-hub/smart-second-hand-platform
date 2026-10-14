@@ -83,6 +83,8 @@ export const useAiChatStore = defineStore('aiChat', () => {
   const isStreaming = ref(false)
   // 抽屉开合不持久化：刷新后默认收起，避免一进页面就被浮层挡住
   const drawerOpen = ref(false)
+  // 抽屉关闭时收到 AI 回复的条数，用于悬浮球上的红点提示
+  const unreadCount = ref(0)
 
   // 当前用户正在浏览的商品。由商品详情页写入，用于消解「这款」这类指代 ——
   // 绝不让模型从聊天历史里猜「这款」指的是什么。
@@ -123,10 +125,18 @@ export const useAiChatStore = defineStore('aiChat', () => {
 
   const open = (): void => {
     drawerOpen.value = true
+    // 打开即视为已读
+    unreadCount.value = 0
   }
 
   const close = (): void => {
     drawerOpen.value = false
+  }
+
+  // 抽屉关闭期间 AI 回复结束 → 记一条未读，提示用户回来看。
+  // 红点必须有真实来源，不能靠无意义的循环动画吸引注意力。
+  const markUnreadIfClosed = (): void => {
+    if (!drawerOpen.value) unreadCount.value += 1
   }
 
   const toggle = (): void => {
@@ -234,6 +244,7 @@ export const useAiChatStore = defineStore('aiChat', () => {
     } finally {
       isStreaming.value = false
       controller = null
+      markUnreadIfClosed()
       persist()
     }
   }
@@ -258,6 +269,7 @@ export const useAiChatStore = defineStore('aiChat', () => {
     messages,
     isStreaming,
     drawerOpen,
+    unreadCount,
     focusProductId,
     hasMessages,
     open,
