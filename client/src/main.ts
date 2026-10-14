@@ -7,6 +7,8 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+// 主题必须在最后引入：它负责覆盖 Element Plus 的默认变量
+import './styles/theme.css'
 
 const app = createApp(App)
 

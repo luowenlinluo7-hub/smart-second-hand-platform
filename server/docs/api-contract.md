@@ -256,37 +256,146 @@ JSON.stringify(price)   // "1899"
 
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| POST | `/ai/search` | 公开（建议登录） | `{ query: string, page?, pageSize? }` | `{ filters, list, total, page, pageSize }` |
-| POST | `/ai/parse` | 登录 | `{ query: string }` | `{ filters }`（仅调试用，不查库） |
+| POST | `/ai/search` | 公开 | `{ query: string, page?, pageSize? }` | `{ parsed, relaxed, relaxedNote, source, parseNote, list, total, page, pageSize }` |
+| POST | `/ai/parse` | 公开 | `{ query: string }` | `{ parsed, source, note }`（仅解析，不查库） |
+
+**限流**：整个 `/api/ai` 前缀按 IP 限流 **10 次 / 分钟**，超出返回 HTTP 429 + `code: 42900`。
+
+**`parsed` 结构**（前端「已识别」标签直接消费）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `category` | `{ id, name } \| null` | 已映射到库中真实分类；映射不到时为 `null` |
+| `condition` | `ProductCondition \| null` | 成色枚举，识别不了时为 `null` |
+| `conditionLabel` | `string \| null` | 用户原始说法（如「九成新」），用于展示 |
+| `priceMin` / `priceMax` | `number \| null` | 价格区间 |
+| `keyword` | `string` | 关键词（可能为空字符串） |
+
+**`source` 取值**（条件来源，前端据此提示用户）
+
+| 值 | 含义 |
+| --- | --- |
+| `ai` | 真实调用 DeepSeek 成功 |
+| `mock` | 未配置 `DEEPSEEK_API_KEY`，或 `AI_MOCK=true`，走本地规则解析 |
+| `fallback` | 模型超时 / 报错 / 返回内容无法解析，降级为本地规则解析 |
 
 **请求 / 响应示例**
 
 ```jsonc
 // 请求
-{ "query": "1000 元以内的九成新 iPhone，最好在广州", "page": 1, "pageSize": 20 }
+{ "query": "九成新2000以内的游戏本", "page": 1, "pageSize": 12 }
 
 // 响应
 {
   "code": 0,
   "message": "ok",
   "data": {
-    "filters": {                       // DeepSeek 自然语言 → 结构化条件
-      "keyword": "iPhone",
-      "maxPrice": "1000.00",
-      "condition": ["LIKE_NEW", "GOOD"],
-      "city": "广州"
+    "parsed": {
+      "category": { "id": "seed-cat-computer", "name": "电脑办公" },
+      "condition": "LIKE_NEW",
+      "conditionLabel": "九成新",
+      "priceMin": null,
+      "priceMax": 2000,
+      "keyword": "游戏本"
     },
+    "relaxed": false,          // 条件过严被放宽时为 true
+    "relaxedNote": null,       // 放宽时给出中文说明，如「已忽略成色要求」
+    "source": "ai",
+    "parseNote": null,         // 降级 / mock 时的说明文字
     "list": [],
-    "total": 6,
+    "total": 2,
     "page": 1,
-    "pageSize": 20
+    "pageSize": 12
   }
 }
 ```
 
+**处理链路**：自然语言 → 模型输出 JSON → zod 宽松校验 → **逐字段清洗（异常值丢弃）**
+→ 映射成真实分类与成色枚举 → Prisma 动态 where 查询。
+
+**条件过严时的放宽阶梯**（严格匹配为空才逐级放宽，**关键词永不丢弃**）
+
+| 步骤 | 保留的条件 |
+| --- | --- |
+| 1 | 分类 + 成色 + 价格 + 关键词（严格） |
+| 2 | 分类 + 价格 + 关键词 |
+| 3 | 分类 + 成色 + 关键词 |
+| 4 | 分类 + 关键词 |
+| 5 | 成色 + 价格 + 关键词 |
+| 6 | 仅关键词 |
+
+六步全空时返回空列表（**不会**退化成返回全量商品）。
+
 > `DEEPSEEK_API_KEY` **只能在后端 `.env` 中使用**，前端只调用 `/ai/search`，
-> 绝不接触 Key，也绝不直连 DeepSeek。解析出的 `filters` 必须经 zod 白名单校验后
+> 绝不接触 Key，也绝不直连 DeepSeek。模型输出必须经 zod 校验与逐字段清洗后
 > 再交给 Prisma 查询，禁止把模型输出直接拼进查询。
+
+### 4.5.1 AI 导购助手（流式） · `POST /ai/chat`
+
+> ⚠️ **统一响应信封的显式例外**
+>
+> 项目约定所有接口返回 `{ code, message, data }`。本接口以 **SSE 事件流**返回，
+> 无法用单个 JSON 信封承载，因此**不适用**该约定，错误也改用 `error` 事件下发。
+>
+> 仅两种情况仍返回标准信封，因为它们发生在事件流开始**之前**：
+> 参数校验失败（HTTP 400 + `40001`）与限流（HTTP 429 + `42900`）。
+
+**请求**
+
+```jsonc
+{
+  "message": "九成新2000以内的游戏本",
+  "history": [                                   // 可省略；后端会自行裁剪
+    { "role": "user", "content": "想买个游戏本" },
+    { "role": "assistant", "content": "..." }
+  ],
+  "context": {
+    "focusProductId": "seed-prod-11",            // 用户当前关注的商品
+    "excludeProductIds": ["seed-prod-11"],       // 已推荐过的，避免重复
+    "previousFilters": { /* 上一轮的 parsed，原样回传即可 */ }
+  }
+}
+```
+
+**响应：SSE 事件流**（`Content-Type: text/event-stream`）
+
+| 事件 | 载荷 | 前端动作 |
+| --- | --- | --- |
+| `thought` | `{ text }`，可多次 | 往折叠区追加一行「思考过程」 |
+| `products` | `{ items[], total, weak, relaxedNote, parsed }` | 渲染商品卡片；**保存 `parsed` 供下一轮回传** |
+| `delta` | `{ text }`，可多次 | 追加到回答气泡（打字机） |
+| `suggestions` | `{ items[] }` | 渲染可点击的建议词 |
+| `done` | `{ parseSource, replySource, degraded, elapsedMs, total }` | 收尾，发送按钮复原 |
+| `error` | `{ code, message }` | 红字提示 + 重试入口 |
+
+`parseSource` / `replySource` 取值：`ai`（真实模型）/ `mock`（本地规则）/ `fallback`（降级）。
+`parseSource` 为 `null` 表示本轮是商品细节追问（如「这件成色怎么样」），未解析条件。
+
+另外每 15 秒发送一次 `: ping` 心跳注释，防止中间代理掐断连接。
+
+**三阶段管线**
+
+| 阶段 | 做什么 | 是否依赖模型 |
+| --- | --- | --- |
+| ① 解析条件 | 复用自然语言解析（规则 / 模型 / 超时降级），立刻推 `thought` | 可能 |
+| ② 检索商品 | 相关性排序 + 逐级放宽，推 `products`（数据全部来自数据库） | **否** |
+| ③ 生成回答 | 模型只负责把已查好的结果说成人话，流式推 `delta` | 是 |
+
+> **思考过程不是模型编的**：每一条 `thought` 都来自后端真实执行的步骤
+> （识别出的条件、检索命中数、是否放宽），因此零延迟、不耗 token、不会瞎编。
+> 阶段 ② 不依赖模型，所以**模型超时或断网时，思考过程与商品卡片依然完整展示**，
+> 只有回答退化为本地话术 —— 这也是离线演示能保持完整体验的原因。
+
+**超时**：`AI_TIMEOUT_MS`（条件解析，默认 5000ms）、
+`AI_FIRST_TOKEN_TIMEOUT_MS`（首字，默认 6000ms）、`AI_CHAT_TIMEOUT_MS`（整体，默认 30000ms）。
+
+**上下文裁剪**：只保留最近 6 条历史并把更早的压成一句摘要，同时有总字符上限兜底。
+历史里**不放商品 JSON**，避免 token 爆炸。
+
+**停止生成**：前端 abort 请求后，后端同步掐断对模型的调用（否则会继续计费）。
+
+**建议词**：由后端按阶段从白名单生成，**不让模型自由生成** ——
+避免出现「可以便宜点吗」这种平台答不出来的建议（本项目无议价功能）。
 
 ### 4.6 数据看板 · `/api/v1/dashboard`
 

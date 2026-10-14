@@ -46,6 +46,10 @@ const IMAGE_START: Record<string, number> = {
   dysonv8: 7,
   midea: 8,
   joyoung: 9,
+  legion: 10,
+  tuf: 11,
+  g15: 4,
+  z3air: 7,
 };
 
 const img = (slug: string, n: number): string[] => {
@@ -177,6 +181,56 @@ const PRODUCTS: SeedProduct[] = [
     viewCount: 74,
     favoriteCount: 5,
   },
+  // 以下 4 件游戏本专供 AI 自然语言搜索演示：
+  // 「九成新2000以内的游戏本」严格匹配就能命中前两件（如移除会让验收用例无结果）
+  {
+    id: 'seed-prod-11',
+    title: '联想拯救者 Y7000P 2021 游戏本 i7/16G/512G',
+    description: '九成新，独显直连，散热与键盘无油光，原装电源适配器。',
+    price: '1899.00',
+    originalPrice: '8299.00',
+    condition: 'LIKE_NEW',
+    categoryId: CATEGORY_COMPUTER,
+    images: img('legion', 3),
+    viewCount: 431,
+    favoriteCount: 63,
+  },
+  {
+    id: 'seed-prod-12',
+    title: '华硕天选 3 游戏本 R7-6800H/16G',
+    description: '九成新，屏幕无亮点，含原装包与鼠标。',
+    price: '1999.00',
+    originalPrice: '7499.00',
+    condition: 'LIKE_NEW',
+    categoryId: CATEGORY_COMPUTER,
+    images: img('tuf', 2),
+    viewCount: 356,
+    favoriteCount: 48,
+  },
+  {
+    id: 'seed-prod-13',
+    title: '戴尔游匣 G15 游戏本 5511',
+    description: '八成新，A 面有细划痕，性能正常，已重装系统。',
+    price: '2450.00',
+    originalPrice: '8999.00',
+    condition: 'GOOD',
+    categoryId: CATEGORY_COMPUTER,
+    images: img('g15', 3),
+    viewCount: 208,
+    favoriteCount: 27,
+  },
+  {
+    id: 'seed-prod-14',
+    title: '机械革命 Z3 Air 游戏本 轻薄款',
+    description: '八成新，重量轻便适合带走，电池健康度 88%。',
+    price: '1350.00',
+    originalPrice: '5699.00',
+    condition: 'GOOD',
+    categoryId: CATEGORY_COMPUTER,
+    images: img('z3air', 2),
+    viewCount: 167,
+    favoriteCount: 18,
+  },
 ];
 
 async function main(): Promise<void> {
@@ -249,7 +303,7 @@ async function main(): Promise<void> {
     );
   }
 
-  // ---------- 3. 商品：10 个，全部在售，归属卖家 ----------
+  // ---------- 3. 商品：14 个，全部在售，归属卖家 ----------
   const products = [];
   for (const p of PRODUCTS) {
     const data = {
