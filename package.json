@@ -1,0 +1,12 @@
+{
+  "name": "smart-second-hand-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "智能二手交易平台 · 仓库根（仅承载跨端脚本；前端依赖见 client/，后端依赖见 server/）",
+  "scripts": {
+    "test:e2e": "node scripts/e2e/run-all.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

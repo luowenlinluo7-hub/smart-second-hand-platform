@@ -263,10 +263,12 @@ export const updateOrderStatus = async (
       include: orderInclude,
     });
 
-    // 取消订单：商品回滚为在售，避免商品被永久锁死
+    // 取消订单：商品回滚为在售，避免商品被永久锁死。
+    // 加了 status: 'SOLD' 窄条件 —— 只回收「因本单被占用」的商品，
+    // 不覆盖卖家自己下架（OFF_SHELF）或审核中（PENDING_REVIEW）的状态。
     if (targetStatus === 'CANCELLED') {
       await tx.product.updateMany({
-        where: { id: { in: result.items.map((i) => i.productId) } },
+        where: { id: { in: result.items.map((i) => i.productId) }, status: 'SOLD' },
         data: { status: 'ON_SALE' },
       });
     }

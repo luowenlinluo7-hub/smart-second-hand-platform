@@ -32,6 +32,9 @@
 │       ├── routes/             路由（挂载在 /api 前缀）
 │       └── utils/              工具
 ├── scripts/demo/               答辩离线演示包（打包脚本 + 启动器 + 说明）
+├── scripts/e2e/                端到端逻辑闭环测试（零依赖，只用 Node 内置能力）
+├── docs/known-issues.md        已知问题清单与取舍说明
+├── package.json                仅承载根级脚本（test:e2e），无依赖、非 workspace
 ├── .env.example
 └── README.md
 ```
@@ -90,6 +93,7 @@ Vite 已配置代理 `/api` → `http://localhost:3000`，开发时无需额外�
 | server | `npm run build` | 编译 TypeScript 到 dist/ |
 | server | `npm run start` | 运行编译后的 dist/index.js |
 | server | `npm run typecheck` | 仅做类型检查 |
+| 根目录 | `npm run test:e2e` | 跑全量端到端测试（需先启动后端，详见[下文](#端到端e2e测试)） |
 
 ## 接口约定
 
@@ -249,6 +253,79 @@ Vite 已配置代理 `/api` → `http://localhost:3000`，开发时无需额外�
 详见 [server/docs/api-contract.md](server/docs/api-contract.md) 4.6 节。
 
 > 看板数据来自 seed 生成的历史订单。若发现图表为空，先执行 `npm run seed`。
+
+## 端到端（E2E）测试
+
+逻辑闭环测试固化在 [scripts/e2e/](scripts/e2e/) 下，**零依赖**（只用 Node 内置 `fetch`），
+因此在没有 `npm install` 的机器上也能直接跑。
+
+```bash
+# 1. 另开一个终端启动后端（E2E 打的是真实 HTTP 接口）
+cd server && npm run dev
+
+# 2. 回到仓库根目录跑全量
+npm run test:e2e
+
+# 推荐：跑完自动清理本次创建的测试数据，保证看板聚合数字干净
+E2E_CLEANUP=1 npm run test:e2e
+```
+
+> Windows PowerShell 下设置环境变量的写法：`$env:E2E_CLEANUP="1"; npm run test:e2e`
+
+输出形如：
+
+```
+══ 3. 订单模块
+  [PASS] 买家下单成功，订单进入 PENDING_PAYMENT 且商品变为 SOLD (33ms)
+  [FAIL] xxx (12ms)
+         └─ 失败原因
+...
+  合计：77 通过，0 失败，2 跳过，总耗时 9.0s
+```
+
+**有任何失败时退出码为 1**，可直接接进 CI。
+
+### 覆盖范围
+
+| Suite | 覆盖内容 |
+| --- | --- |
+| 0. 环境前置检查 | 服务可达性、seed 演示账号可登录（未启动时快速失败并给出提示） |
+| 1. 用户模块 | 注册（重复邮箱 409 / 弱密码 400）、登录（错密码 / 未知账号 401）、`/me` 鉴权、改资料、**改密码后旧密码失效新密码可用** |
+| 2. 商品模块 | USER 发布 403 → SELLER 发布 `PENDING_REVIEW` → 审核通过上架 → `viewCount` 自增 → 编辑权限 → 下架 → 重新上架；分页 / 价格 / 分类参数校验 |
+| 3. 订单模块 | 下单（商品转 `SOLD`）→ 付款 → 发货 → 收货 → 评价；重复下单 409、越权流转 403、非参与方 403、取消订单回滚商品、**评价落库核对** |
+| 4. AI 模块 | `/parse`、`/search` 结构契约（`source ∈ {ai,mock,fallback}`、只返回在售）、检索相关性、SSE `/chat` 事件协议与三阶段管线顺序、限流响应头 |
+| 5. 管理员看板 | 401 / 403 权限边界、六大区块结构、金额精度、趋势数组长度与日期窗口、状态分布口径一致性 |
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `BASE_URL` | `http://localhost:3000` | 被测服务地址，可指向远端部署 |
+| `E2E_CLEANUP` | 关 | 设为 `1` 时，结束后用 Prisma 清理本次创建的用户 / 商品 / 订单（**仅对本地地址生效**） |
+| `E2E_RATE_LIMIT` | 关 | 设为 `1` 时额外验证 AI 限流打满返回 429（会消耗额度，之后一分钟内 AI 用例会全部 429） |
+| `E2E_FRONTEND_URL` | 空 | 设为前端地址时，额外校验商品站内图片可访问（`200`） |
+| `E2E_TIMEOUT_MS` | `20000` | 单请求超时 |
+
+### 注意事项
+
+- E2E 会创建**真实数据**，跑完会打印本次创建了哪些实体。看板是全库聚合，
+  若在意数字干净，请用 `E2E_CLEANUP=1` 或在跑完后重新 `npm run seed`。
+- `/api/ai/search` 与 `/api/ai/parse` 共用一个 **10 次/分钟**的限流桶，
+  同一分钟内连续重跑可能撞到 429，等待约 1 分钟后重跑即可（用例会给出这条提示）。
+- AI 用例只断言**结构与不变量**，不断言具体文案 —— 模型输出本身不确定。
+
+## 已知限制
+
+测试过程中确认的问题与有意保留的取舍都记录在
+[docs/known-issues.md](docs/known-issues.md)，当前无阻断级缺陷。
+
+| 限制 | 影响 |
+| --- | --- |
+| 订单状态流转存在并发竞态 | 重复点击可能重复写入状态（不越权、不错账）；单机演示不可触发 |
+| 下单置 `SOLD` 但不递减 `stock` | 单件交易场景无影响；多件库存商品会有出入 |
+| 评价只写不读 | 评价已落库但无展示入口；商品详情看不到评分，卖家看不到信誉分 |
+| `api-contract.md` 中 2 个接口未实现 | `GET /admin/orders`、`PATCH /admin/reviews/:id/status` 仅存在于契约文档 |
+| 看板趋势日期标签为 `MM-DD` | 跨年窗口下需要靠顺序判断年份，数据本身不串桶 |
 
 ## 常见报错处理
 
