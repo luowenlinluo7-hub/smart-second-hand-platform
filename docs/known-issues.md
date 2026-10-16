@@ -168,13 +168,20 @@ const updated = await prisma.$transaction(async (tx) => {
 # 1. 启动后端（另开一个终端）
 cd server && npm run dev
 
-# 2. 跑全量 E2E
+# 2. 跑全量 E2E（测试数据默认会自动清理）
 npm run test:e2e
-
-# 跑完自动清理本次创建的测试数据（推荐，保证看板数字干净）
-E2E_CLEANUP=1 npm run test:e2e
 ```
 
-Windows PowerShell 下设置环境变量：`$env:E2E_CLEANUP="1"; npm run test:e2e`
+需要保留测试数据时：`E2E_KEEP_DATA=1 npm run test:e2e`
+（Windows PowerShell：`$env:E2E_KEEP_DATA="1"; npm run test:e2e`）
+
+单独清理残留数据（只删含 `E2E` 标识的记录，不碰 seed 数据）：
+
+```bash
+cd server
+npm run db:clean-e2e              # dry-run，先看会删什么
+npm run db:clean-e2e -- --yes     # 确认后删除
+npm run db:reset-demo             # 清理 + 重灌 seed（答辩前一键清场）
+```
 
 更完整的说明见 [README.md](../README.md) 的「端到端（E2E）测试」一节。

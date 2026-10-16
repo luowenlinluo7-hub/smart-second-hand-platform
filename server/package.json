@@ -10,6 +10,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "prisma db seed",
+    "db:clean-e2e": "tsx prisma/clean-test-data.ts",
+    "db:reset-demo": "npm run db:clean-e2e -- --yes && npm run seed",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

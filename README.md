@@ -265,12 +265,11 @@ cd server && npm run dev
 
 # 2. 回到仓库根目录跑全量
 npm run test:e2e
-
-# 推荐：跑完自动清理本次创建的测试数据，保证看板聚合数字干净
-E2E_CLEANUP=1 npm run test:e2e
 ```
 
-> Windows PowerShell 下设置环境变量的写法：`$env:E2E_CLEANUP="1"; npm run test:e2e`
+> Windows PowerShell 下设置环境变量的写法：`$env:E2E_KEEP_DATA="1"; npm run test:e2e`
+
+**测试数据默认会被自动清理**（本地目标），跑完不会污染看板数字。需要保留时加 `E2E_KEEP_DATA=1`。
 
 输出形如：
 
@@ -301,15 +300,23 @@ E2E_CLEANUP=1 npm run test:e2e
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `BASE_URL` | `http://localhost:3000` | 被测服务地址，可指向远端部署 |
-| `E2E_CLEANUP` | 关 | 设为 `1` 时，结束后用 Prisma 清理本次创建的用户 / 商品 / 订单（**仅对本地地址生效**） |
+| `E2E_KEEP_DATA` | 关 | 设为 `1` 时**保留**本次创建的测试数据；默认会自动清理（**仅对本地地址生效**） |
 | `E2E_RATE_LIMIT` | 关 | 设为 `1` 时额外验证 AI 限流打满返回 429（会消耗额度，之后一分钟内 AI 用例会全部 429） |
 | `E2E_FRONTEND_URL` | 空 | 设为前端地址时，额外校验商品站内图片可访问（`200`） |
 | `E2E_TIMEOUT_MS` | `20000` | 单请求超时 |
 
 ### 注意事项
 
-- E2E 会创建**真实数据**，跑完会打印本次创建了哪些实体。看板是全库聚合，
-  若在意数字干净，请用 `E2E_CLEANUP=1` 或在跑完后重新 `npm run seed`。
+- 测试会创建**真实数据**（用户 / 商品 / 订单 / 评价），**默认在结束后自动清理**，
+  并会打印创建与清理清单。看板是全库聚合，若想在跑测试时保留数据用于观察，
+  用 `E2E_KEEP_DATA=1`，之后可用 `npm run db:clean-e2e` 单独清理。
+- 单独清理残留测试数据（只删含 `E2E` 标识的记录，不碰 seed 数据）：
+  ```bash
+  cd server
+  npm run db:clean-e2e              # dry-run：只打印将删除什么
+  npm run db:clean-e2e -- --yes     # 确认后执行删除
+  npm run db:reset-demo             # 清理 + 重新灌入 seed（答辩前一键清场）
+  ```
 - `/api/ai/search` 与 `/api/ai/parse` 共用一个 **10 次/分钟**的限流桶，
   同一分钟内连续重跑可能撞到 429，等待约 1 分钟后重跑即可（用例会给出这条提示）。
 - AI 用例只断言**结构与不变量**，不断言具体文案 —— 模型输出本身不确定。

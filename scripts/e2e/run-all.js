@@ -3,7 +3,7 @@
 // 用法：
 //   npm run test:e2e                                   # 跑本地 http://localhost:3000
 //   BASE_URL=https://api.example.com npm run test:e2e   # 跑远端
-//   E2E_CLEANUP=1 npm run test:e2e                     # 跑完清理本次创建的数据
+//   E2E_KEEP_DATA=1 npm run test:e2e                   # 保留本次创建的测试数据（默认会清理）
 //   E2E_RATE_LIMIT=1 npm run test:e2e                  # 额外验证 AI 限流 429
 //   E2E_FRONTEND_URL=http://localhost:5173 npm run test:e2e  # 顺带校验站内图片可访问
 //
@@ -57,8 +57,11 @@ const main = async () => {
   console.log(paint('智能二手交易平台 · 逻辑闭环 E2E', C.bold));
   console.log(paint(`目标服务：${baseUrl}`, C.dim));
   console.log(paint(`本次运行标识：${context.runId}`, C.dim));
-  if (process.env.E2E_CLEANUP === '1') {
-    console.log(paint('E2E_CLEANUP=1：结束后将清理本次创建的数据', C.yellow));
+  // 默认清理，这里提前告知，避免用户以为数据被永久留下（或反之）
+  if (process.env.E2E_KEEP_DATA === '1') {
+    console.log(paint('E2E_KEEP_DATA=1：本次创建的测试数据将被保留', C.yellow));
+  } else {
+    console.log(paint('结束后将自动清理本次创建的测试数据（E2E_KEEP_DATA=1 可保留）', C.dim));
   }
 
   // ---------- 前置检查 ----------
@@ -130,7 +133,7 @@ const main = async () => {
   } else {
     console.log(paint(`  未清理：${cleanupResult.reason}`, C.yellow));
     console.log(
-      paint('  （测试数据会影响数据看板的聚合数字，需要干净数据时请重跑 npm run seed）', C.dim),
+      paint('  （测试数据会影响数据看板的聚合数字，可执行 npm run db:clean-e2e 单独清理）', C.dim),
     );
   }
 

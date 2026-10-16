@@ -1,19 +1,21 @@
-// E2E 结束后的可选清理
+// E2E 结束后的自动清理
 //
 // 为什么需要它：E2E 会创建真实的用户 / 商品 / 订单，而数据看板是**全库聚合**的，
 // 测试数据会改变 GMV、订单数等数字（答辩要用干净数据）。API 层无法清理
 // （商品 DELETE 是软删除、没有删除用户的接口），所以只能走 Prisma。
 //
-// 触发条件：E2E_CLEANUP=1 且目标为本地地址。
-// 指向公网时直接跳过 —— 远端库不应被测试脚本直连，也不该被删除数据。
+// 触发策略（默认安全 > 默认便利）：
+//   - 默认：**自动清理**。跑测试不该给库留下垃圾，忘了加变量也不该留下脏数据。
+//   - E2E_KEEP_DATA=1：保留数据（调试用，例如想看测试造出来的订单长什么样）。
+//   - 目标为远端时始终跳过 —— 远端库不应被测试脚本直连，更不该被删数据。
 'use strict';
 
 const { openDb, closeDb, dbUnavailableReason } = require('./db');
 const { context } = require('./context');
 
 const cleanup = async () => {
-  if (process.env.E2E_CLEANUP !== '1') {
-    return { ran: false, reason: '未开启（设 E2E_CLEANUP=1 可清理）' };
+  if (process.env.E2E_KEEP_DATA === '1') {
+    return { ran: false, reason: '已按 E2E_KEEP_DATA=1 保留测试数据' };
   }
 
   const { prisma, reason } = openDb();
