@@ -6,9 +6,11 @@ import { Goods, List, Money, User } from '@element-plus/icons-vue'
 import type { EChartsOption } from 'echarts'
 import EChart from '@/components/EChart.vue'
 import { getDashboard } from '@/api/admin'
+import { useIsMobile } from '@/composables/useIsMobile'
 import type { DashboardData } from '@/types/api'
 
 const router = useRouter()
+const { isMobile } = useIsMobile()
 
 const loading = ref(true)
 const data = ref<DashboardData | null>(null)
@@ -95,7 +97,13 @@ const trendOption = computed<EChartsOption>(() => {
     legend: { data: ['成交额', '订单量'], top: 0, left: 'center' },
     // top 留出图例与轴名的空间，避免轴名压到图例或数据线
     grid: { left: 12, right: 12, top: 64, bottom: 8, containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: trend?.dates ?? [] },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: trend?.dates ?? [],
+      // 移动端日期刻度会重叠，交给 ECharts 自动稀疏显示
+      axisLabel: { interval: isMobile.value ? 'auto' : 0, hideOverlap: true },
+    },
     yAxis: [
       {
         type: 'value',
@@ -145,7 +153,9 @@ const statusOption = computed<EChartsOption>(() => ({
       center: ['50%', '46%'],
       avoidLabelOverlap: true,
       // 描边色与圆角由 brand 主题统一提供（pie.itemStyle）
-      label: { formatter: '{b}\n{c} 笔' },
+      // 移动端画布窄，外置标签会互相挤压，改为只看图例
+      label: { show: !isMobile.value, formatter: '{b}\n{c} 笔' },
+      labelLine: { show: !isMobile.value },
       data: (data.value?.orderStatus ?? []).map((item) => ({
         name: item.name,
         value: item.value,
@@ -164,7 +174,8 @@ const categoryOption = computed<EChartsOption>(() => ({
       // 环形图：与上面的订单状态饼图在视觉上做出区分
       radius: ['46%', '66%'],
       center: ['50%', '46%'],
-      label: { formatter: '{b}\n{c} 件' },
+      label: { show: !isMobile.value, formatter: '{b}\n{c} 件' },
+      labelLine: { show: !isMobile.value },
       data: (data.value?.categoryShare ?? []).map((item) => ({
         name: item.name,
         value: item.value,
@@ -192,11 +203,16 @@ const topOption = computed<EChartsOption>(() => {
       },
     },
     grid: { left: 12, right: 70, top: 16, bottom: 8, containLabel: true },
-    xAxis: { type: 'value', name: '成交额(元)' },
+    // 移动端画布窄，数值轴刻度会互相压字；柱尾已有金额标签，故窄屏隐藏数值轴
+    xAxis: {
+      type: 'value',
+      name: isMobile.value ? '' : '成交额(元)',
+      axisLabel: { show: !isMobile.value },
+    },
     yAxis: {
       type: 'category',
       data: ordered.map((item) => item.title),
-      axisLabel: { width: 140, overflow: 'truncate' },
+      axisLabel: { width: isMobile.value ? 96 : 140, overflow: 'truncate' },
     },
     series: [
       {
@@ -236,7 +252,7 @@ onMounted(fetchData)
 
     <!-- KPI 卡片 -->
     <el-row :gutter="16">
-      <el-col v-for="card in kpiCards" :key="card.key" :xs="12" :sm="12" :md="6">
+      <el-col v-for="card in kpiCards" :key="card.key" :xs="24" :sm="12" :md="6">
         <el-card v-loading="loading" shadow="never" class="kpi-card">
           <div class="kpi-body">
             <div class="kpi-icon">
@@ -297,7 +313,7 @@ onMounted(fetchData)
       <el-card v-loading="loading" shadow="never" class="chart-card">
         <template #header><span class="chart-title">成交额与订单量趋势</span></template>
         <el-empty v-if="isEmptyTrend" description="该时间段暂无订单" :image-size="80" />
-        <EChart v-else :option="trendOption" height="340px" />
+        <EChart v-else :option="trendOption" height="var(--chart-h-lg)" />
       </el-card>
 
       <el-row :gutter="16">
@@ -305,14 +321,14 @@ onMounted(fetchData)
           <el-card v-loading="loading" shadow="never" class="chart-card">
             <template #header><span class="chart-title">订单状态分布</span></template>
             <el-empty v-if="isEmptyStatus" description="暂无订单" :image-size="80" />
-            <EChart v-else :option="statusOption" height="320px" />
+            <EChart v-else :option="statusOption" height="var(--chart-h-md)" />
           </el-card>
         </el-col>
         <el-col :xs="24" :md="12">
           <el-card v-loading="loading" shadow="never" class="chart-card">
             <template #header><span class="chart-title">商品分类占比</span></template>
             <el-empty v-if="isEmptyCategory" description="暂无商品" :image-size="80" />
-            <EChart v-else :option="categoryOption" height="320px" />
+            <EChart v-else :option="categoryOption" height="var(--chart-h-md)" />
           </el-card>
         </el-col>
       </el-row>
@@ -320,7 +336,7 @@ onMounted(fetchData)
       <el-card v-loading="loading" shadow="never" class="chart-card">
         <template #header><span class="chart-title">高价值商品 Top 5（按成交额）</span></template>
         <el-empty v-if="isEmptyTop" description="暂无成交记录" :image-size="80" />
-        <EChart v-else :option="topOption" height="320px" />
+        <EChart v-else :option="topOption" height="var(--chart-h-md)" />
       </el-card>
     </template>
   </div>
@@ -328,14 +344,14 @@ onMounted(fetchData)
 
 <style scoped>
 .toolbar-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -352,7 +368,7 @@ onMounted(fetchData)
 }
 
 .kpi-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2);
 }
 
 .kpi-body {
@@ -397,7 +413,7 @@ onMounted(fetchData)
 }
 
 .mini-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2);
 }
 
 .mini-label {
@@ -420,16 +436,38 @@ onMounted(fetchData)
 }
 
 .skeleton {
-  padding: 16px;
+  padding: var(--space-2);
 }
 
 .chart-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2);
 }
 
 .chart-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  /* 工具条与单选组在窄屏上下堆叠 */
+  .toolbar {
+    align-items: flex-start;
+  }
+
+  /* KPI 变成单列后，收窄卡片内边距，避免 4 张卡吃掉首屏 */
+  .kpi-card :deep(.el-card__body) {
+    padding: var(--space-2);
+  }
+
+  .kpi-value {
+    font-size: 20px;
+  }
+
+  .mini-hint {
+    display: block;
+    margin-left: 0;
+  }
 }
 </style>

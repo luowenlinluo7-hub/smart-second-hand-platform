@@ -82,11 +82,13 @@ const onSubmit = async (): Promise<void> => {
 .auth-page {
   display: flex;
   justify-content: center;
-  padding-top: 80px;
+  padding-top: var(--space-6);
 }
 
+/* 定宽卡片在 390px 屏会横向溢出，改为「撑满可用宽度 + 上限 380px」 */
 .auth-card {
-  width: 380px;
+  width: 100%;
+  max-width: 380px;
 }
 
 .card-title {

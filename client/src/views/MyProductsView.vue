@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteProduct, getMyProducts, relistProduct } from '@/api/product'
 import { PRODUCT_STATUS_LABEL, PRODUCT_STATUS_TABS, PRODUCT_STATUS_TAG_TYPE } from '@/constants/status'
+import { useIsMobile } from '@/composables/useIsMobile'
 import type { Product, ProductStatus } from '@/types/api'
 
 const router = useRouter()
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const list = ref<Product[]>([])
@@ -132,7 +134,7 @@ onMounted(fetchList)
             </template>
           </el-table-column>
           <el-table-column label="浏览" width="80" prop="viewCount" />
-          <el-table-column label="操作" width="220" fixed="right">
+          <el-table-column label="操作" :width="220" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }: { row: Product }">
               <el-button
                 v-if="row.status === 'ON_SALE'"

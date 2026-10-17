@@ -224,7 +224,7 @@ onMounted(() => {
 }
 
 .filter-bar {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-1);
 }
 
 .order-item {
@@ -237,10 +237,11 @@ onMounted(() => {
 .order-head {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: var(--space-1);
   font-size: 13px;
   color: var(--el-text-color-secondary);
-  padding-bottom: 8px;
+  padding-bottom: var(--space-1);
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
@@ -314,6 +315,30 @@ onMounted(() => {
 .pagination {
   display: flex;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: var(--space-2);
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  .card-header {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  /* 状态筛选有 6 个按钮，窄屏一行放不下，改为换行排布 */
+  .filter-bar :deep(.el-radio-group) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) 0;
+  }
+
+  .order-foot {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
 }
 </style>

@@ -3,10 +3,12 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { createOrder } from '@/api/order'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useCartStore } from '@/stores/cart'
 
 const router = useRouter()
 const cartStore = useCartStore()
+const { isMobile } = useIsMobile()
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -112,7 +114,13 @@ const onSubmit = async (): Promise<void> => {
 
     <!-- 结算弹窗：填写收货信息 -->
     <el-dialog v-model="dialogVisible" title="填写收货信息" width="480px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        :label-position="isMobile ? 'top' : 'right'"
+        :label-width="isMobile ? 'auto' : '90px'"
+      >
         <el-form-item label="收货人" prop="receiverName">
           <el-input v-model="form.receiverName" placeholder="收货人姓名" />
         </el-form-item>
@@ -164,8 +172,8 @@ const onSubmit = async (): Promise<void> => {
 .cart-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
@@ -216,9 +224,9 @@ const onSubmit = async (): Promise<void> => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 16px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--el-border-color-light);
 }
 
@@ -226,5 +234,49 @@ const onSubmit = async (): Promise<void> => {
   color: var(--el-color-danger);
   font-size: 20px;
   font-weight: 700;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  /* 单行放不下缩略图 + 标题 + 数量 + 小计 + 移除，
+     改成两行网格：第一行图/标题/移除，第二行数量与小计 */
+  .cart-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'thumb info remove'
+      'thumb qty subtotal';
+    column-gap: var(--space-1);
+    row-gap: var(--space-1);
+    align-items: center;
+  }
+
+  .thumb {
+    grid-area: thumb;
+    align-self: start;
+  }
+
+  .info {
+    grid-area: info;
+  }
+
+  .qty {
+    grid-area: qty;
+    width: auto;
+  }
+
+  .subtotal {
+    grid-area: subtotal;
+    width: auto;
+  }
+
+  .cart-item .el-button {
+    grid-area: remove;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
 }
 </style>

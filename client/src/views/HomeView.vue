@@ -222,10 +222,15 @@ onMounted(async () => {
           v-model="filters.keyword"
           placeholder="搜索商品标题或描述"
           clearable
-          style="width: 240px"
+          class="filter-field filter-keyword"
           @keyup.enter="onSearch"
         />
-        <el-select v-model="filters.categoryId" placeholder="全部分类" clearable style="width: 160px">
+        <el-select
+          v-model="filters.categoryId"
+          placeholder="全部分类"
+          clearable
+          class="filter-field"
+        >
           <el-option
             v-for="c in categories"
             :key="c.id"
@@ -233,7 +238,12 @@ onMounted(async () => {
             :value="c.id"
           />
         </el-select>
-        <el-select v-model="filters.condition" placeholder="全部成色" clearable style="width: 160px">
+        <el-select
+          v-model="filters.condition"
+          placeholder="全部成色"
+          clearable
+          class="filter-field"
+        >
           <el-option
             v-for="(label, value) in CONDITION_LABEL"
             :key="value"
@@ -247,7 +257,7 @@ onMounted(async () => {
           :precision="2"
           placeholder="最低价"
           :controls="false"
-          style="width: 120px"
+          class="filter-field filter-price"
         />
         <span class="sep">—</span>
         <el-input-number
@@ -256,7 +266,7 @@ onMounted(async () => {
           :precision="2"
           placeholder="最高价"
           :controls="false"
-          style="width: 120px"
+          class="filter-field filter-price"
         />
         <el-button type="primary" @click="onSearch">搜索</el-button>
         <el-button @click="onReset">重置</el-button>
@@ -313,7 +323,12 @@ onMounted(async () => {
 .ai-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-2);
+}
+
+.ai-bar .el-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .ai-badge {
@@ -352,8 +367,21 @@ onMounted(async () => {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-1);
   flex-wrap: wrap;
+}
+
+/* 筛选控件宽度集中在此，避免散落的内联固定宽度 */
+.filter-field {
+  width: 160px;
+}
+
+.filter-keyword {
+  width: 240px;
+}
+
+.filter-price {
+  width: 120px;
 }
 
 .sep {
@@ -366,7 +394,7 @@ onMounted(async () => {
 }
 
 .cover {
-  height: 160px;
+  height: var(--card-cover-h);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -398,6 +426,8 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
 }
 
 .price {
@@ -409,6 +439,7 @@ onMounted(async () => {
 .condition {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+  white-space: nowrap;
 }
 
 .meta-bottom {
@@ -423,5 +454,46 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   margin-top: 16px;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  /* AI 搜索：输入框与按钮纵向堆叠，按钮占满整行，避免被截断 */
+  .ai-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .ai-bar .el-button {
+    width: 100%;
+  }
+
+  /* 筛选栏：两列网格，关键词独占一行，价格区间各占一列 */
+  .filter-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .filter-field,
+  .filter-keyword,
+  .filter-price {
+    width: 100%;
+  }
+
+  .filter-keyword {
+    grid-column: 1 / -1;
+  }
+
+  /* 「—」在网格里单独占一格毫无意义，移动端隐藏 */
+  .sep {
+    display: none;
+  }
+
+  .filter-bar .el-button {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 </style>

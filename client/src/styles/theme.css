@@ -28,6 +28,19 @@
   --space-5: 48px;
   --space-6: 64px;
 
+  /* ---------- 尺寸 token（响应式场景集中在此覆盖） ---------- */
+  /* 触控最小点击区域 */
+  --tap-target: 44px;
+  --header-h: 60px;
+  /* 图表高度：移动端在下方 @media 内整体收窄 */
+  --chart-h-lg: 340px;
+  --chart-h-md: 320px;
+  /* 商品详情轮播 / 首页卡片封面 */
+  --carousel-h: 320px;
+  --card-cover-h: 160px;
+  /* 页面主区域左右内边距 */
+  --main-padding: var(--space-2);
+
   /* ---------- 字体 ---------- */
   /* 标题用衬线增强品牌感，正文用非衬线保证可读性。
      fallback 刻意避开 Inter / Roboto / Arial（规范禁止）。 */
@@ -124,4 +137,24 @@ h3,
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* ---------- 移动端覆盖 ---------- */
+/* 说明：媒体查询的断点值无法使用 CSS 变量（规范限制），
+   因此这里是全站唯一写死 767px 的地方，与 useIsMobile 的 MOBILE_QUERY 保持一致。 */
+@media (max-width: 767px) {
+  :root {
+    /* 窄屏纵向空间宝贵，图表整体收窄 */
+    --chart-h-lg: 260px;
+    --chart-h-md: 240px;
+    --carousel-h: 240px;
+    --card-cover-h: 120px;
+    --main-padding: var(--space-1);
+  }
+
+  /* 小屏下表格/长内容允许在自身容器内横向滚动，
+     但绝不能让整个页面被撑开 */
+  .page {
+    max-width: 100%;
+  }
 }

@@ -5,12 +5,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { createReviews, getOrder, updateOrderStatus } from '@/api/order'
 import { ORDER_STATUS_LABEL } from '@/constants/status'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -104,7 +106,13 @@ onMounted(fetchOrder)
           </div>
         </template>
 
-        <el-steps v-if="order.status !== 'CANCELLED'" :active="activeStep" align-center finish-status="success">
+        <el-steps
+          v-if="order.status !== 'CANCELLED'"
+          :active="activeStep"
+          :direction="isMobile ? 'vertical' : 'horizontal'"
+          :align-center="!isMobile"
+          finish-status="success"
+        >
           <el-step v-for="s in statusSteps" :key="s.key" :title="s.label" />
         </el-steps>
         <el-alert v-else type="info" :closable="false" title="该订单已取消，商品已重新上架" />

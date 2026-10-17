@@ -5,10 +5,12 @@ import { ElMessage, type FormInstance, type FormRules, type UploadFile } from 'e
 import { Plus } from '@element-plus/icons-vue'
 import { updatePassword, updateProfile } from '@/api/auth'
 import { uploadImages } from '@/api/product'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { isMobile } = useIsMobile()
 
 const profileRef = ref<FormInstance>()
 const pwdRef = ref<FormInstance>()
@@ -151,8 +153,8 @@ const handleLogout = (): void => {
 <template>
   <div class="profile-page">
     <el-row :gutter="16">
-      <el-col :span="12">
-        <el-card shadow="never">
+      <el-col :xs="24" :md="12">
+        <el-card shadow="never" class="profile-card">
           <template #header>
             <span>基本资料</span>
           </template>
@@ -169,7 +171,13 @@ const handleLogout = (): void => {
 
           <el-divider />
 
-          <el-form ref="profileRef" :model="profileForm" :rules="profileRules" label-width="80px">
+          <el-form
+            ref="profileRef"
+            :model="profileForm"
+            :rules="profileRules"
+            :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? 'auto' : '90px'"
+          >
             <el-form-item label="昵称" prop="nickname">
               <el-input v-model="profileForm.nickname" placeholder="昵称" />
             </el-form-item>
@@ -210,13 +218,19 @@ const handleLogout = (): void => {
         </el-card>
       </el-col>
 
-      <el-col :span="12">
-        <el-card shadow="never">
+      <el-col :xs="24" :md="12">
+        <el-card shadow="never" class="profile-card">
           <template #header>
             <span>修改密码</span>
           </template>
 
-          <el-form ref="pwdRef" :model="pwdForm" :rules="pwdRules" label-width="80px">
+          <el-form
+            ref="pwdRef"
+            :model="pwdForm"
+            :rules="pwdRules"
+            :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? 'auto' : '90px'"
+          >
             <el-form-item label="原密码" prop="oldPassword">
               <el-input v-model="pwdForm.oldPassword" type="password" show-password />
             </el-form-item>
@@ -246,10 +260,15 @@ const handleLogout = (): void => {
   margin: 0 auto;
 }
 
+/* 两栏堆叠时保持卡片间距 */
+.profile-card {
+  margin-bottom: var(--space-2);
+}
+
 .avatar-upload {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-1);
 }
 
 .avatar-box {

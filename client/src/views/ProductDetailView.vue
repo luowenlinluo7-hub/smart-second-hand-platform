@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getProduct, getProductReviews } from '@/api/product'
 import { getUserProfile } from '@/api/user'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAiChatStore } from '@/stores/aiChat'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -16,6 +17,7 @@ const router = useRouter()
 const aiChat = useAiChatStore()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const product = ref<Product | null>(null)
@@ -169,7 +171,11 @@ onUnmounted(() => {
         <el-row :gutter="24">
           <!-- 左侧轮播图 -->
           <el-col :xs="24" :md="10">
-            <el-carousel v-if="product.images && product.images.length" height="320px" indicator-position="outside">
+            <el-carousel
+              v-if="product.images && product.images.length"
+              height="var(--carousel-h)"
+              indicator-position="outside"
+            >
               <el-carousel-item v-for="(img, i) in product.images" :key="i">
                 <img :src="img" class="carousel-img" alt="商品图" />
               </el-carousel-item>
@@ -184,7 +190,7 @@ onUnmounted(() => {
               <span class="price">¥{{ product.price }}</span>
               <span v-if="product.originalPrice" class="original">原价 ¥{{ product.originalPrice }}</span>
             </div>
-            <el-descriptions :column="2" class="info" border>
+            <el-descriptions :column="isMobile ? 1 : 2" class="info" border>
               <el-descriptions-item label="成色">
                 {{ CONDITION_LABEL[product.condition] }}
               </el-descriptions-item>
@@ -551,12 +557,12 @@ onUnmounted(() => {
 
 .carousel-img {
   width: 100%;
-  height: 320px;
+  height: var(--carousel-h);
   object-fit: cover;
 }
 
 .no-image {
-  height: 320px;
+  height: var(--carousel-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -597,6 +603,54 @@ onUnmounted(() => {
 }
 
 .actions {
-  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.actions .el-button {
+  margin-left: 0;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  .title {
+    font-size: 18px;
+    margin-bottom: var(--space-1);
+  }
+
+  .price {
+    font-size: 22px;
+  }
+
+  /* 操作按钮纵向铺满，避免 4 个按钮挤成一行被截断 */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions .el-button {
+    width: 100%;
+  }
+
+  /* 卖家卡与评价概览从横排改竖排 */
+  .seller-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .review-summary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .summary-score {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-1);
+    min-width: 0;
+  }
 }
 </style>

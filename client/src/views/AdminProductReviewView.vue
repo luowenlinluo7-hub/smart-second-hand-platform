@@ -2,7 +2,10 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { auditProduct, getAuditProducts } from '@/api/admin'
+import { useIsMobile } from '@/composables/useIsMobile'
 import type { Product } from '@/types/api'
+
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const list = ref<Product[]>([])
@@ -105,7 +108,7 @@ onMounted(fetchList)
             </template>
           </el-table-column>
           <el-table-column label="分类" width="100" prop="category.name" />
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="操作" :width="180" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }: { row: Product }">
               <el-button size="small" type="success" @click="onApprove(row)">通过</el-button>
               <el-button size="small" type="danger" @click="onReject(row)">驳回</el-button>

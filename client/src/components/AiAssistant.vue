@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAiChatStore, type AiChatMessage } from '@/stores/aiChat'
 
 const router = useRouter()
 const chat = useAiChatStore()
+const { isMobile } = useIsMobile()
 
 const input = ref('')
 const scrollRef = ref<HTMLElement | null>(null)
@@ -94,7 +96,7 @@ watch(
     v-model="chat.drawerOpen"
     title="AI 导购助手"
     direction="rtl"
-    size="440px"
+    :size="isMobile ? '100%' : '440px'"
     class="ai-drawer"
   >
     <template #header>
@@ -271,8 +273,8 @@ watch(
 /* 外层锚点：只负责一次性入场动画 */
 .ai-fab-anchor {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: var(--space-2);
+  bottom: var(--space-2);
   z-index: 2000;
   /* 用 both 保证动画结束后停在终态；这里改的是外层，不影响内层 button 的 hover */
   animation: ai-fab-enter 250ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
@@ -687,5 +689,17 @@ watch(
   font-size: 12px;
   color: var(--el-text-color-placeholder);
   text-align: center;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  /* 抽屉已占满全宽，正文内边距保持 16px 即可，不必再额外留白 */
+  .ai-body {
+    padding: 0 var(--space-2) var(--space-2);
+  }
+
+  .ai-welcome {
+    padding: var(--space-2) 0;
+  }
 }
 </style>
