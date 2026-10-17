@@ -6,7 +6,6 @@ import { Goods, List, Money, User } from '@element-plus/icons-vue'
 import type { EChartsOption } from 'echarts'
 import EChart from '@/components/EChart.vue'
 import { getDashboard } from '@/api/admin'
-import { surfaceColor } from '@/utils/cssVar'
 import type { DashboardData } from '@/types/api'
 
 const router = useRouter()
@@ -145,8 +144,7 @@ const statusOption = computed<EChartsOption>(() => ({
       radius: ['38%', '62%'],
       center: ['50%', '46%'],
       avoidLabelOverlap: true,
-      // canvas 无法解析 CSS 变量，描边色取主题 token 的实际值
-      itemStyle: { borderRadius: 6, borderColor: surfaceColor(), borderWidth: 2 },
+      // 描边色与圆角由 brand 主题统一提供（pie.itemStyle）
       label: { formatter: '{b}\n{c} 笔' },
       data: (data.value?.orderStatus ?? []).map((item) => ({
         name: item.name,
@@ -166,7 +164,6 @@ const categoryOption = computed<EChartsOption>(() => ({
       // 环形图：与上面的订单状态饼图在视觉上做出区分
       radius: ['46%', '66%'],
       center: ['50%', '46%'],
-      itemStyle: { borderRadius: 6, borderColor: surfaceColor(), borderWidth: 2 },
       label: { formatter: '{b}\n{c} 件' },
       data: (data.value?.categoryShare ?? []).map((item) => ({
         name: item.name,
