@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBuyerOrders, getSellerOrders, updateOrderStatus } from '@/api/order'
+import { ORDER_STATUS_LABEL, ORDER_STATUS_OPTIONS, ORDER_STATUS_TAG_TYPE } from '@/constants/status'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
 
@@ -16,34 +17,6 @@ const list = ref<Order[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
-
-const statusLabels: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: '待付款',
-  PENDING_SHIPMENT: '待发货',
-  SHIPPED: '已发货',
-  COMPLETED: '已完成',
-  REVIEWED: '已评价',
-  CANCELLED: '已取消',
-}
-
-const statusTagTypes: Record<OrderStatus, 'info' | 'warning' | 'success' | 'danger' | 'primary'> = {
-  PENDING_PAYMENT: 'danger',
-  PENDING_SHIPMENT: 'warning',
-  SHIPPED: 'primary',
-  COMPLETED: 'success',
-  REVIEWED: 'success',
-  CANCELLED: 'info',
-}
-
-const statusOptions: { value: '' | OrderStatus; label: string }[] = [
-  { value: '', label: '全部' },
-  { value: 'PENDING_PAYMENT', label: '待付款' },
-  { value: 'PENDING_SHIPMENT', label: '待发货' },
-  { value: 'SHIPPED', label: '已发货' },
-  { value: 'COMPLETED', label: '已完成' },
-  { value: 'REVIEWED', label: '已评价' },
-  { value: 'CANCELLED', label: '已取消' },
-]
 
 const fetchList = async (): Promise<void> => {
   loading.value = true
@@ -164,7 +137,7 @@ onMounted(() => {
 
       <div class="filter-bar">
         <el-radio-group v-model="status" size="small" @change="onFilter">
-          <el-radio-button v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+          <el-radio-button v-for="opt in ORDER_STATUS_OPTIONS" :key="opt.value" :value="opt.value">
             {{ opt.label }}
           </el-radio-button>
         </el-radio-group>
@@ -177,8 +150,8 @@ onMounted(() => {
           <div class="order-head">
             <span class="order-no">订单号：{{ order.orderNo }}</span>
             <span class="counterparty">{{ role === 'buyer' ? '卖家' : '买家' }}：{{ counterparty(order) }}</span>
-            <el-tag :type="statusTagTypes[order.status]" size="small">
-              {{ statusLabels[order.status] }}
+            <el-tag :type="ORDER_STATUS_TAG_TYPE[order.status]" size="small">
+              {{ ORDER_STATUS_LABEL[order.status] }}
             </el-tag>
           </div>
 
@@ -252,13 +225,13 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   font-size: 13px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .order-no {
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .counterparty {
@@ -286,17 +259,17 @@ onMounted(() => {
 }
 
 .thumb.placeholder {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 
 .goods-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .goods-price {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   margin-top: 2px;
 }
 

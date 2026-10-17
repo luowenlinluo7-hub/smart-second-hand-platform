@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getProducts } from '@/api/product'
 import { getCategories } from '@/api/category'
 import { searchByAi } from '@/api/ai'
+import { CONDITION_LABEL } from '@/constants/status'
 import type { AiSearchResult, Category, Product, ProductCondition } from '@/types/api'
 
 const router = useRouter()
@@ -24,13 +25,6 @@ const filters = reactive({
 
 const page = ref(1)
 const pageSize = ref(12)
-
-const conditionLabels: Record<ProductCondition, string> = {
-  NEW: '全新',
-  LIKE_NEW: '几乎全新',
-  GOOD: '轻微使用痕迹',
-  FAIR: '明显使用痕迹',
-}
 
 // AI 搜索状态：aiResult 非空时说明当前列表来自 AI 搜索，而不是手动筛选
 const aiQuery = ref('')
@@ -168,7 +162,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="product-page">
+  <div class="page">
     <!-- AI 自然语言搜索 -->
     <el-card shadow="never" class="ai-card">
       <div class="ai-bar">
@@ -241,7 +235,7 @@ onMounted(async () => {
         </el-select>
         <el-select v-model="filters.condition" placeholder="全部成色" clearable style="width: 160px">
           <el-option
-            v-for="(label, value) in conditionLabels"
+            v-for="(label, value) in CONDITION_LABEL"
             :key="value"
             :label="label"
             :value="value"
@@ -283,7 +277,7 @@ onMounted(async () => {
             <div class="title">{{ p.title }}</div>
             <div class="meta">
               <span class="price">¥{{ p.price }}</span>
-              <span class="condition">{{ conditionLabels[p.condition] }}</span>
+              <span class="condition">{{ CONDITION_LABEL[p.condition] }}</span>
             </div>
             <div class="meta-bottom">
               <span>{{ p.category.name }}</span>
@@ -308,11 +302,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.product-page {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
 .filter-card {
   margin-bottom: 16px;
 }
@@ -332,7 +321,7 @@ onMounted(async () => {
   padding: 0 8px;
   border-radius: 8px;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--brand-on-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 20px;
@@ -368,7 +357,7 @@ onMounted(async () => {
 }
 
 .sep {
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .product-card {
@@ -382,7 +371,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
 }
 
@@ -393,13 +382,13 @@ onMounted(async () => {
 }
 
 .cover-placeholder {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
 }
 
 .title {
   margin: 10px 0 6px;
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -419,7 +408,7 @@ onMounted(async () => {
 
 .condition {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .meta-bottom {
@@ -427,7 +416,7 @@ onMounted(async () => {
   justify-content: space-between;
   margin-top: 6px;
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
 }
 
 .pagination {

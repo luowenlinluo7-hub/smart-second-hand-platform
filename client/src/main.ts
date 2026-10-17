@@ -4,6 +4,12 @@ import { createApp } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 
+// 字体走本地打包（@fontsource），不连 Google Fonts，保证国内与断网环境可用。
+// 只引需要的字重与 chinese-simplified 子集，避免把整套 CJK（含日韩）字形全部打进包。
+import '@fontsource/noto-serif-sc/chinese-simplified-600.css'
+import '@fontsource/noto-sans-sc/chinese-simplified-400.css'
+import '@fontsource/noto-sans-sc/chinese-simplified-500.css'
+
 import App from './App.vue'
 import router from './router'
 import './style.css'

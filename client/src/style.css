@@ -1,11 +1,10 @@
-/* 全局基础样式：组件外观统一交给 Element Plus */
-:root {
-  font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', Roboto, sans-serif;
-  line-height: 1.5;
-  color-scheme: light;
-}
+/* 全局结构 reset。
+   颜色 / 字体 / 圆角 / 阴影等品牌 token 全部在 styles/theme.css 定义，
+   这里只负责清掉浏览器默认值，不写任何具体色值与字体族。 */
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -18,6 +17,12 @@ body,
 }
 
 body {
-  background-color: #f5f7fa;
-  color: #303133;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img {
+  max-width: 100%;
+  display: block;
 }

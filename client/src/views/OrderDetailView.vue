@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createReviews, getOrder, updateOrderStatus } from '@/api/order'
+import { ORDER_STATUS_LABEL } from '@/constants/status'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
 
@@ -17,21 +18,12 @@ const order = ref<Order | null>(null)
 // 评价表单：每个商品一条
 const reviewForm = reactive<Record<string, { rating: number; content: string }>>({})
 
-const statusLabels: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: '待付款',
-  PENDING_SHIPMENT: '待发货',
-  SHIPPED: '已发货',
-  COMPLETED: '已完成',
-  REVIEWED: '已评价',
-  CANCELLED: '已取消',
-}
-
 const statusSteps: { key: OrderStatus; label: string }[] = [
-  { key: 'PENDING_PAYMENT', label: '待付款' },
-  { key: 'PENDING_SHIPMENT', label: '待发货' },
-  { key: 'SHIPPED', label: '已发货' },
-  { key: 'COMPLETED', label: '已完成' },
-  { key: 'REVIEWED', label: '已评价' },
+  { key: 'PENDING_PAYMENT', label: ORDER_STATUS_LABEL.PENDING_PAYMENT },
+  { key: 'PENDING_SHIPMENT', label: ORDER_STATUS_LABEL.PENDING_SHIPMENT },
+  { key: 'SHIPPED', label: ORDER_STATUS_LABEL.SHIPPED },
+  { key: 'COMPLETED', label: ORDER_STATUS_LABEL.COMPLETED },
+  { key: 'REVIEWED', label: ORDER_STATUS_LABEL.REVIEWED },
 ]
 
 // 当前进度（取消的订单时间线不适用）
@@ -106,7 +98,7 @@ onMounted(fetchOrder)
           <div class="head">
             <span>订单号：{{ order.orderNo }}</span>
             <el-tag :type="order.status === 'CANCELLED' ? 'info' : 'success'">
-              {{ statusLabels[order.status] }}
+              {{ ORDER_STATUS_LABEL[order.status] }}
             </el-tag>
           </div>
         </template>
@@ -229,7 +221,7 @@ onMounted(fetchOrder)
   gap: 24px;
   margin-top: 16px;
   font-size: 13px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   flex-wrap: wrap;
 }
 
@@ -250,7 +242,7 @@ onMounted(fetchOrder)
 }
 
 .thumb.placeholder {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 
 .goods-info {
@@ -260,12 +252,12 @@ onMounted(fetchOrder)
 
 .goods-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .goods-sub {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   margin-top: 4px;
 }
 
@@ -277,7 +269,7 @@ onMounted(fetchOrder)
 .total-row {
   text-align: right;
   margin-top: 12px;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 
 .amount {
@@ -292,7 +284,7 @@ onMounted(fetchOrder)
 
 .review-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   margin-bottom: 6px;
 }
 

@@ -88,14 +88,17 @@ const handleLogout = (): void => {
   display: flex;
   align-items: center;
   gap: 24px;
-  background: #fff;
+  background: var(--el-bg-color-overlay);
   border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .brand {
+  font-family: var(--font-title);
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--el-text-color-primary);
 }
 
 .nav {
@@ -105,8 +108,9 @@ const handleLogout = (): void => {
 }
 
 .nav a {
-  color: #606266;
+  color: var(--el-text-color-regular);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav a.router-link-active {
@@ -122,7 +126,7 @@ const handleLogout = (): void => {
 
 .nickname {
   cursor: pointer;
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-size: 14px;
   outline: none;
 }

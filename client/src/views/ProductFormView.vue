@@ -6,6 +6,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { createProduct, getProduct, updateProduct } from '@/api/product'
 import { getCategories } from '@/api/category'
 import { useAuthStore } from '@/stores/auth'
+import { CONDITION_OPTIONS } from '@/constants/status'
 import type { Category, ProductCondition } from '@/types/api'
 
 const route = useRoute()
@@ -34,13 +35,6 @@ const form = reactive({
 // 图片：URL 数组 + el-upload 的 file-list
 const images = ref<string[]>([])
 const fileList = ref<UploadFile[]>([])
-
-const conditionLabels: Record<ProductCondition, string> = {
-  NEW: '全新',
-  LIKE_NEW: '几乎全新',
-  GOOD: '轻微使用痕迹',
-  FAIR: '明显使用痕迹',
-}
 
 // 上传请求头：携带 JWT
 const uploadHeaders = {
@@ -172,10 +166,10 @@ onMounted(async () => {
         <el-form-item label="成色" prop="condition">
           <el-select v-model="form.condition" style="width: 220px">
             <el-option
-              v-for="(label, value) in conditionLabels"
-              :key="value"
-              :label="label"
-              :value="value"
+              v-for="item in CONDITION_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
             />
           </el-select>
         </el-form-item>
@@ -228,12 +222,12 @@ onMounted(async () => {
 
 .unit {
   margin-left: 8px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .upload-tip {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   margin-top: 6px;
 }
 </style>

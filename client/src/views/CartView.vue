@@ -157,7 +157,7 @@ const onSubmit = async (): Promise<void> => {
 
 .seller-title {
   font-size: 13px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   margin-bottom: 8px;
 }
 
@@ -178,7 +178,7 @@ const onSubmit = async (): Promise<void> => {
 }
 
 .thumb.placeholder {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 
 .info {
@@ -188,7 +188,7 @@ const onSubmit = async (): Promise<void> => {
 
 .title {
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -196,13 +196,13 @@ const onSubmit = async (): Promise<void> => {
 
 .price {
   font-size: 13px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   margin-top: 4px;
 }
 
 .qty {
   width: 48px;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 
 .subtotal {

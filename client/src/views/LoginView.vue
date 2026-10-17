@@ -101,7 +101,7 @@ const onSubmit = async (): Promise<void> => {
 
 .footer {
   text-align: center;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
 }
 </style>

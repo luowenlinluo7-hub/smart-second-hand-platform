@@ -148,12 +148,12 @@ onMounted(fetchList)
 }
 
 .thumb.placeholder {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 
 .p-title {
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -162,7 +162,7 @@ onMounted(fetchList)
 
 .p-desc {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -1,19 +1,43 @@
 /* ============================================================
    品牌主题 · 唯一入口
    ------------------------------------------------------------
-   必须在 main.ts 中「最后」引入，顺序为：
-     element-plus/dist/index.css  →  style.css  →  theme.css
-   这样这里的变量才能覆盖 Element Plus 默认值。
+   引入顺序（见 main.ts）：
+     element-plus/dist/index.css  →  @fontsource 字体  →  style.css  →  theme.css
+   这里覆盖 Element Plus 的 CSS 变量，是所有品牌值的**唯一定义处**。
+   页面组件不要再写死颜色 / 圆角 / 阴影 / 字体，统一引用这里的 token。
 
-   本次只落地「颜色 token」。圆角、阴影、字体按项目规范属
-   UI 统一优化阶段的工作，此处不动，避免影响其他页面布局。
+   规范来源：AGENTS.md「前端设计规范」
    ============================================================ */
 
 :root {
-  /* ---------- 主色：暖橙 #ff6b35 ---------- */
-  --el-color-primary: #ff6b35;
+  /* ---------- 品牌基础色 ---------- */
+  --brand-primary: #ff6b35; /* 暖橙主色 */
+  --brand-bg: #faf9f7; /* 暖白背景（不用纯白） */
+  --brand-text: #1a1a1a; /* 主文字 */
+  --brand-text-regular: #666666; /* 次级文字 */
+  --brand-text-secondary: #999999; /* 辅助文字 */
+  /* 主色背景上的前景色（按钮文字 / 徽标 / 气泡等）。
+     纯白是**有意**保留的：暖白放在主色上会显得发灰。 */
+  --brand-on-primary: #ffffff;
 
-  /* EP 的色阶是主色与白色的混合，逐级变浅，用于 hover / 禁用 / 浅底 tag */
+  /* ---------- 间距（8 的倍数，只约束自定义布局） ---------- */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --space-6: 64px;
+
+  /* ---------- 字体 ---------- */
+  /* 标题用衬线增强品牌感，正文用非衬线保证可读性。
+     fallback 刻意避开 Inter / Roboto / Arial（规范禁止）。 */
+  --font-title: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --el-font-family: var(--font-body);
+
+  /* ---------- 主色覆盖（EP 的按钮 / 链接 / tag / 分页 / 开关等自动跟随） ---------- */
+  --el-color-primary: var(--brand-primary);
+  /* 色阶 = 主色与白色的混合，逐级变浅，用于 hover / 禁用 / 浅底 */
   --el-color-primary-light-3: #ff9772;
   --el-color-primary-light-5: #ffb59a;
   --el-color-primary-light-7: #ffd3c2;
@@ -22,23 +46,82 @@
   /* 深一档，用于 hover 加深与 active */
   --el-color-primary-dark-2: #cc562a;
 
-  /* ---------- 背景：暖白 #faf9f7（避免纯白 #ffffff 的冷硬感） ---------- */
-  --el-bg-color: #faf9f7;
-  /* 浮层（dialog / drawer / dropdown / popover）的衍生变量，
+  /* ---------- 背景 ---------- */
+  --el-bg-color: var(--brand-bg);
+  /* 浮层（dialog / drawer / dropdown / popover / card）的衍生变量，
      不覆盖的话这些组件仍会渲染成纯白 */
-  --el-bg-color-overlay: #faf9f7;
-  --el-bg-color-page: #faf9f7;
+  --el-bg-color-overlay: var(--brand-bg);
+  --el-bg-color-page: var(--brand-bg);
 
-  /* ---------- 文字：深灰三级 ---------- */
-  --el-text-color-primary: #1a1a1a;
-  --el-text-color-regular: #666666;
-  --el-text-color-secondary: #999999;
+  /* ---------- 文字：深灰三级 + 占位 / 禁用 ---------- */
+  --el-text-color-primary: var(--brand-text);
+  --el-text-color-regular: var(--brand-text-regular);
+  --el-text-color-secondary: var(--brand-text-secondary);
+  /* EP 默认的占位与禁用色偏冷蓝灰，改成暖灰更协调 */
+  --el-text-color-placeholder: #a8a29a;
+  --el-text-color-disabled: #c0bab3;
+
+  /* ---------- 填充与边框：由冷灰改为暖灰 ---------- */
+  --el-fill-color-light: #f5f3f0;
+  --el-fill-color: #efece8;
+  --el-fill-color-blank: #fffdfb;
+  --el-border-color: #e6e1da;
+  --el-border-color-light: #ece8e2;
+  --el-border-color-lighter: #f1eee9;
+
+  /* ---------- 圆角：按钮 8px，小控件 6px ---------- */
+  --el-border-radius-small: 6px;
+  --el-border-radius-base: 8px;
+  --el-border-radius-round: 999px;
+
+  /* ---------- 阴影：统一微阴影，避免各处写死 ---------- */
+  --el-box-shadow-lighter: 0 1px 4px rgba(0, 0, 0, 0.04);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --el-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  /* 悬浮态加深 */
+  --el-box-shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-/* 页面底色。
-   style.css 里写的是 Element Plus 默认的 #f5f7fa，
-   这里统一改用暖白，保证 theme.css 是唯一主题入口。 */
+/* 页面底色与正文字体。
+   style.css 只做结构 reset，不定义颜色与字体，保证这里是唯一入口。 */
 body {
   background-color: var(--el-bg-color);
   color: var(--el-text-color-primary);
+  font-family: var(--font-body);
+}
+
+/* 标题统一走衬线体 */
+h1,
+h2,
+h3,
+.font-title {
+  font-family: var(--font-title);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- 通用布局类 ---------- */
+
+/* 卡片：12px 圆角 + 微阴影，悬浮加深 */
+.app-card {
+  background-color: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  box-shadow: var(--el-box-shadow-light);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.app-card:hover {
+  box-shadow: var(--el-box-shadow-dark);
+}
+
+/* 页面容器：居中 + 统一最大宽度。
+   刻意不加 padding：App 的 el-main 已有内边距，再加会挤压现有布局；
+   页面级留白统一在逐页精修阶段处理。 */
+.page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }

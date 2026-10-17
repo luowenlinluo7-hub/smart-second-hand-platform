@@ -6,7 +6,8 @@ import { getProduct } from '@/api/product'
 import { useAiChatStore } from '@/stores/aiChat'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
-import type { Product, ProductCondition } from '@/types/api'
+import { CONDITION_LABEL } from '@/constants/status'
+import type { Product } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,13 +17,6 @@ const cartStore = useCartStore()
 
 const loading = ref(false)
 const product = ref<Product | null>(null)
-
-const conditionLabels: Record<ProductCondition, string> = {
-  NEW: '全新',
-  LIKE_NEW: '几乎全新',
-  GOOD: '轻微使用痕迹',
-  FAIR: '明显使用痕迹',
-}
 
 // 加入购物车前的统一校验
 const ensureBuyable = (): boolean => {
@@ -114,7 +108,7 @@ onUnmounted(() => {
             </div>
             <el-descriptions :column="2" class="info" border>
               <el-descriptions-item label="成色">
-                {{ conditionLabels[product.condition] }}
+                {{ CONDITION_LABEL[product.condition] }}
               </el-descriptions-item>
               <el-descriptions-item label="分类">{{ product.category.name }}</el-descriptions-item>
               <el-descriptions-item label="库存">{{ product.stock }}</el-descriptions-item>
@@ -170,14 +164,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-placeholder);
 }
 
 .title {
   margin: 0 0 16px;
   font-size: 22px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .price-row {
@@ -192,7 +186,7 @@ onUnmounted(() => {
 
 .original {
   margin-left: 12px;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   text-decoration: line-through;
 }
 
@@ -201,7 +195,7 @@ onUnmounted(() => {
 }
 
 .description {
-  color: #606266;
+  color: var(--el-text-color-regular);
   line-height: 1.8;
   white-space: pre-wrap;
 }

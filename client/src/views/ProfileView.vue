@@ -277,11 +277,11 @@ const handleLogout = (): void => {
 
 .avatar-plus {
   font-size: 24px;
-  color: #8c939d;
+  color: var(--el-text-color-secondary);
 }
 
 .avatar-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 </style>

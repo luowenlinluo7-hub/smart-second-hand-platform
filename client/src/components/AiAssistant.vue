@@ -300,7 +300,7 @@ watch(
   border: none;
   border-radius: 50%;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--brand-on-primary);
   cursor: pointer;
   /* 基础阴影保持静态；hover 时用伪元素叠一层更深的，
      这样只需要过渡 opacity，不触发布局或重绘 */
@@ -407,7 +407,7 @@ watch(
   line-height: 44px;
   border-radius: 12px;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--brand-on-primary);
   font-weight: 700;
 }
 
@@ -455,7 +455,7 @@ watch(
   line-height: 28px;
   border-radius: 8px;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--brand-on-primary);
   font-size: 12px;
   font-weight: 700;
   text-align: center;
@@ -478,7 +478,7 @@ watch(
 .ai-bubble-user {
   max-width: 78%;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--brand-on-primary);
 }
 
 .ai-bubble-ai {

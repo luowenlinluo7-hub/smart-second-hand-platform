@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteProduct, getMyProducts, relistProduct } from '@/api/product'
+import { PRODUCT_STATUS_LABEL, PRODUCT_STATUS_TABS, PRODUCT_STATUS_TAG_TYPE } from '@/constants/status'
 import type { Product, ProductStatus } from '@/types/api'
 
 const router = useRouter()
@@ -15,33 +16,6 @@ const total = ref(0)
 const activeTab = ref<'ALL' | ProductStatus>('ALL')
 const page = ref(1)
 const pageSize = ref(10)
-
-const statusTabs: { value: 'ALL' | ProductStatus; label: string }[] = [
-  { value: 'ALL', label: '全部' },
-  { value: 'PENDING_REVIEW', label: '待审核' },
-  { value: 'ON_SALE', label: '在售' },
-  { value: 'SOLD', label: '已售' },
-  { value: 'OFF_SHELF', label: '已下架' },
-  { value: 'REJECTED', label: '已驳回' },
-]
-
-const statusLabels: Record<ProductStatus, string> = {
-  DRAFT: '草稿',
-  PENDING_REVIEW: '待审核',
-  ON_SALE: '在售',
-  SOLD: '已售',
-  OFF_SHELF: '已下架',
-  REJECTED: '已驳回',
-}
-
-const statusTagTypes: Record<ProductStatus, 'info' | 'warning' | 'success' | 'danger' | 'primary'> = {
-  DRAFT: 'info',
-  PENDING_REVIEW: 'warning',
-  ON_SALE: 'success',
-  SOLD: 'info',
-  OFF_SHELF: 'info',
-  REJECTED: 'danger',
-}
 
 const fetchList = async (): Promise<void> => {
   loading.value = true
@@ -121,7 +95,7 @@ onMounted(fetchList)
       </template>
 
       <el-tabs v-model="activeTab" @tab-change="onTabChange">
-        <el-tab-pane v-for="tab in statusTabs" :key="tab.value" :name="tab.value">
+        <el-tab-pane v-for="tab in PRODUCT_STATUS_TABS" :key="tab.value" :name="tab.value">
           <template #label>
             {{ tab.label }}
             <el-badge
@@ -152,8 +126,8 @@ onMounted(fetchList)
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }: { row: Product }">
-              <el-tag :type="statusTagTypes[row.status]" size="small">
-                {{ statusLabels[row.status] }}
+              <el-tag :type="PRODUCT_STATUS_TAG_TYPE[row.status]" size="small">
+                {{ PRODUCT_STATUS_LABEL[row.status] }}
               </el-tag>
             </template>
           </el-table-column>
@@ -237,7 +211,7 @@ onMounted(fetchList)
 }
 
 .thumb.placeholder {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 
 .p-title {
