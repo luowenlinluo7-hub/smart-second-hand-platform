@@ -479,7 +479,8 @@ watch(
 
 .ai-bubble-user {
   max-width: 78%;
-  background: var(--el-color-primary);
+  /* 用户气泡承载正文，白字需要 4.5:1，因此用加深档（主色 #ff6b35 仅 2.84:1） */
+  background: var(--brand-primary-strong);
   color: var(--brand-on-primary);
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getProduct, getProductReviews } from '@/api/product'
@@ -122,11 +122,11 @@ const addToCart = (): void => {
   ElMessage.success('已加入购物车')
 }
 
-// 立即购买：加入购物车后直接去结算
+// 立即购买：只结算这一件商品，走独立参数，不写进购物车。
+// 老实现是 add() 后跳 /cart，会把购物车里已有的商品一起下单（多付钱）。
 const buyNow = (): void => {
   if (!ensureBuyable() || !product.value) return
-  cartStore.add(toCartItem(product.value))
-  router.push('/cart')
+  router.push({ path: '/cart', query: { buyNow: product.value.id } })
 }
 
 // 打开 AI 助手并让它知道用户正在看这件商品，
@@ -135,12 +135,20 @@ const askAi = (): void => {
   aiChat.open()
 }
 
-onMounted(async () => {
+// 加载商品主体 + 卖家统计 + 评价。
+// 同一路由下切换商品时会被重复调用，所以先重置上一件商品的数据，避免残留。
+const loadProduct = async (id: string): Promise<void> => {
   loading.value = true
-  // 先把关注商品告诉助手，用户此时问「这件成色怎么样」才有意义
-  aiChat.setFocusProduct(String(route.params.id))
+  product.value = null
+  seller.value = null
+  reviews.value = []
+  reviewSummary.value = null
+  reviewTotal.value = 0
+  reviewPage.value = 1
+  // 先把当前浏览的商品告诉助手，用户此时问「这件成色怎么样」才有意义
+  aiChat.setFocusProduct(id)
   try {
-    product.value = await getProduct(String(route.params.id))
+    product.value = await getProduct(id)
 
     // 卖家统计与评价并行拉取：任一失败都不应影响商品主体展示
     void getUserProfile(product.value.sellerId)
@@ -156,7 +164,22 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  void loadProduct(String(route.params.id))
 })
+
+// 从 AI 助手商品卡等处跳转到另一件商品时，路由记录相同、组件不会重建，
+// 必须监听 id 重新加载；否则页面仍显示上一件商品，加购/下单都会下错。
+watch(
+  () => route.params.id,
+  (id) => {
+    if (typeof id === 'string' && id) {
+      void loadProduct(id)
+    }
+  },
+)
 
 // 离开详情页就清掉关注点，避免在别的页面问「这件」时指向已经过期的商品
 onUnmounted(() => {

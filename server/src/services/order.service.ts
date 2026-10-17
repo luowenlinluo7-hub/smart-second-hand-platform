@@ -76,7 +76,8 @@ export const createOrder = async (
   for (const item of input.items) {
     merged.set(item.productId, (merged.get(item.productId) ?? 0) + item.quantity);
   }
-  const productIds = [...merged.keys()];
+  // 按 id 排序后加锁：并发下单同一批商品时保持一致的加锁顺序，降低死锁概率
+  const productIds = [...merged.keys()].sort();
 
   return prisma.$transaction(async (tx) => {
     const products = await tx.product.findMany({
@@ -153,11 +154,17 @@ export const createOrder = async (
       created.push(formatOrder(order));
     }
 
-    // 扣减商品状态：二手商品默认单件，下单后置 SOLD
-    await tx.product.updateMany({
-      where: { id: { in: productIds } },
+    // 扣减商品状态：二手商品默认单件，下单后置 SOLD。
+    // 关键：where 里带上 status: 'ON_SALE'，把「仍在售」作为更新的前置条件，
+    // 用受影响行数做乐观锁。并发两人同时下单同一件商品时，后到的事务
+    // 重新匹配条件会得到 count=0，从而整体回滚，避免一物多卖。
+    const claimed = await tx.product.updateMany({
+      where: { id: { in: productIds }, status: 'ON_SALE' },
       data: { status: 'SOLD' },
     });
+    if (claimed.count !== productIds.length) {
+      throw ApiError.conflict('商品已被他人购买，请刷新后重试');
+    }
 
     return created;
   });

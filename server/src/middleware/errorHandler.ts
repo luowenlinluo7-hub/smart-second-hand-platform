@@ -38,6 +38,10 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       case 'P2003':
         res.status(400).json(failure(BizCode.PARAM_ERROR, '关联数据不存在'));
         return;
+      // 事务死锁 / 写冲突：属于并发竞争，按 409 语义返回，避免落到「数据库操作失败」的 400
+      case 'P2034':
+        res.status(409).json(failure(BizCode.CONFLICT, '操作冲突，请刷新后重试'));
+        return;
       default:
         res.status(400).json(failure(BizCode.PARAM_ERROR, `数据库操作失败（${err.code}）`));
         return;

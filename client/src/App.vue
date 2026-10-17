@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { Menu } from '@element-plus/icons-vue'
 import AiAssistant from '@/components/AiAssistant.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { useAiChatStore } from '@/stores/aiChat'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -12,8 +13,20 @@ import { useCartStore } from '@/stores/cart'
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
+const aiChatStore = useAiChatStore()
 const router = useRouter()
 const { isMobile } = useIsMobile()
+
+// 购物车与 AI 会话都按用户隔离存储：登录 / 退出 / 切换账号时同步切换归属，
+// 避免换账号后仍看到上一个账号的购物车和聊天记录（甚至用新账号替别人下单）。
+watch(
+  () => authStore.user?.id ?? null,
+  (userId) => {
+    cartStore.switchUser(userId)
+    aiChatStore.switchUser(userId)
+  },
+  { immediate: true },
+)
 
 // 移动端导航抽屉
 const navOpen = ref(false)

@@ -15,10 +15,32 @@ fs.mkdirSync(uploadDir, { recursive: true });
 // 允许的图片类型
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
+// 扩展名白名单：**落盘的文件名不再取用户上传的扩展名**。
+// 若直接沿用 originalname 的扩展名，攻击者可以上传 .html/.svg/.js 并把
+// Content-Type 伪造成 image/png，文件会被 express.static 以 text/html 返回，
+// 从而获得同源脚本执行能力（可读取 localStorage 里的 JWT）。
+const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+// 由 MIME 反查一个安全扩展名，彻底与用户输入解耦
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    // 优先用 MIME 映射出的扩展名；映射不到时再退回 originalname，
+    // 但仍必须是白名单内的图片扩展名，否则拒绝。
+    const fromMime = EXT_BY_MIME[file.mimetype];
+    const fromName = path.extname(file.originalname).toLowerCase();
+    const ext = fromMime ?? (ALLOWED_EXT.has(fromName) ? fromName : '');
+    if (!ext) {
+      cb(new Error('仅支持 jpg / png / webp / gif 图片'), '');
+      return;
+    }
     const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
     cb(null, name);
   },
@@ -30,6 +52,13 @@ export const uploadImages = multer({
   limits: { fileSize: 5 * 1024 * 1024, files: 9 },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
+      cb(new Error('仅支持 jpg / png / webp / gif 图片'));
+      return;
+    }
+    // 扩展名白名单：有扩展名时必须合法（防止 .html / .svg / .js 蒙混过关）。
+    // 无扩展名（部分客户端直接给 blob）时不阻断，落盘名由 MIME 决定。
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext && !ALLOWED_EXT.has(ext)) {
       cb(new Error('仅支持 jpg / png / webp / gif 图片'));
       return;
     }

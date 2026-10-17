@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { createOrder } from '@/api/order'
+import { getProduct } from '@/api/product'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { useCartStore } from '@/stores/cart'
+import { useCartStore, type CartItem } from '@/stores/cart'
 
+const route = useRoute()
 const router = useRouter()
 const cartStore = useCartStore()
 const { isMobile } = useIsMobile()
@@ -13,6 +15,79 @@ const { isMobile } = useIsMobile()
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
+
+// ---------- 立即购买模式 ----------
+// 商品详情页的「立即购买」会跳到 /cart?buyNow=<productId>。
+// 该模式下只结算这一件商品，**既不读取也不清空购物车**，
+// 避免把用户购物车里已有的商品一起下单。
+const buyNowId = computed<string | null>(() => {
+  const value = route.query.buyNow
+  return typeof value === 'string' && value ? value : null
+})
+
+const buyNowItem = ref<CartItem | null>(null)
+const buyNowLoading = ref(false)
+
+const loadBuyNow = async (productId: string): Promise<void> => {
+  buyNowLoading.value = true
+  buyNowItem.value = null
+  try {
+    const product = await getProduct(productId)
+    if (product.status !== 'ON_SALE') {
+      ElMessage.warning('该商品已售出或已下架')
+      return
+    }
+    buyNowItem.value = {
+      productId: product.id,
+      title: product.title,
+      price: product.price,
+      image: product.images?.[0] ?? null,
+      sellerId: product.sellerId,
+      sellerName: product.seller.nickname || product.seller.username,
+      quantity: 1,
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '商品加载失败')
+  } finally {
+    buyNowLoading.value = false
+  }
+}
+
+watch(
+  buyNowId,
+  (id) => {
+    if (id) {
+      void loadBuyNow(id)
+      return
+    }
+    buyNowItem.value = null
+  },
+  { immediate: true },
+)
+
+// 本次要结算的条目：立即购买模式只有一件，普通模式是整车
+const checkoutItems = computed<CartItem[]>(() =>
+  buyNowId.value ? (buyNowItem.value ? [buyNowItem.value] : []) : cartStore.items,
+)
+
+const checkoutAmount = computed<string>(() =>
+  checkoutItems.value.reduce((sum, i) => sum + Number(i.price) * i.quantity, 0).toFixed(2),
+)
+
+// 展示用分组：立即购买模式也要按卖家分组，模板结构与普通模式保持一致
+const displayGroups = computed(() => {
+  const groups = new Map<string, { sellerId: string; sellerName: string; items: CartItem[] }>()
+  for (const item of checkoutItems.value) {
+    const group = groups.get(item.sellerId) ?? {
+      sellerId: item.sellerId,
+      sellerName: item.sellerName,
+      items: [],
+    }
+    group.items.push(item)
+    groups.set(item.sellerId, group)
+  }
+  return [...groups.values()]
+})
 
 const form = reactive({
   receiverName: '',
@@ -36,8 +111,8 @@ const onRemove = (productId: string): void => {
 
 // 打开结算弹窗
 const openCheckout = (): void => {
-  if (cartStore.items.length === 0) {
-    ElMessage.warning('购物车是空的')
+  if (checkoutItems.value.length === 0) {
+    ElMessage.warning('没有可结算的商品')
     return
   }
   dialogVisible.value = true
@@ -48,17 +123,27 @@ const onSubmit = async (): Promise<void> => {
   if (!formRef.value) return
   const valid = await formRef.value.validate().then(() => true).catch(() => false)
   if (!valid) return
+  if (checkoutItems.value.length === 0) {
+    ElMessage.warning('没有可结算的商品')
+    return
+  }
 
   submitting.value = true
   try {
     const orders = await createOrder({
-      items: cartStore.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      items: checkoutItems.value.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+      })),
       receiverName: form.receiverName,
       receiverPhone: form.receiverPhone,
       receiverAddress: form.receiverAddress,
       remark: form.remark || undefined,
     })
-    cartStore.clear()
+    // 立即购买不动购物车；普通结算才整车清空
+    if (!buyNowId.value) {
+      cartStore.clear()
+    }
     dialogVisible.value = false
     ElMessage.success(`下单成功，共生成 ${orders.length} 个订单`)
     router.push('/orders')
@@ -72,23 +157,37 @@ const onSubmit = async (): Promise<void> => {
 
 <template>
   <div class="cart-page">
-    <el-card shadow="never">
+    <el-card v-loading="buyNowLoading" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>购物车（{{ cartStore.totalCount }} 件）</span>
-          <el-button v-if="cartStore.items.length" text type="danger" @click="cartStore.clear()">
+          <span v-if="buyNowId">立即购买</span>
+          <span v-else>购物车（{{ cartStore.totalCount }} 件）</span>
+          <el-button
+            v-if="!buyNowId && cartStore.items.length"
+            text
+            type="danger"
+            @click="cartStore.clear()"
+          >
             清空购物车
           </el-button>
         </div>
       </template>
 
-      <el-empty v-if="cartStore.items.length === 0" description="购物车是空的，去逛逛吧">
+      <!-- 立即购买模式下商品不可购买（已售出 / 已下架 / 加载失败） -->
+      <el-empty
+        v-if="buyNowId && !buyNowLoading && !buyNowItem"
+        description="该商品暂时无法购买"
+      >
+        <el-button type="primary" @click="router.back()">返回商品页</el-button>
+      </el-empty>
+
+      <el-empty v-else-if="!buyNowId && cartStore.items.length === 0" description="购物车是空的，去逛逛吧">
         <el-button type="primary" @click="router.push('/')">去挑选商品</el-button>
       </el-empty>
 
       <template v-else>
         <!-- 按卖家分组展示（下单后端会按卖家拆单） -->
-        <div v-for="group in cartStore.groupedBySeller" :key="group.sellerId" class="seller-group">
+        <div v-for="group in displayGroups" :key="group.sellerId" class="seller-group">
           <div class="seller-title">卖家：{{ group.sellerName }}</div>
           <div v-for="item in group.items" :key="item.productId" class="cart-item">
             <img v-if="item.image" :src="item.image" class="thumb" alt="商品图" />
@@ -99,13 +198,15 @@ const onSubmit = async (): Promise<void> => {
             </div>
             <div class="qty">×{{ item.quantity }}</div>
             <div class="subtotal">¥{{ (Number(item.price) * item.quantity).toFixed(2) }}</div>
-            <el-button text type="danger" @click="onRemove(item.productId)">移除</el-button>
+            <el-button v-if="!buyNowId" text type="danger" @click="onRemove(item.productId)">
+              移除
+            </el-button>
           </div>
         </div>
 
         <div class="footer">
           <div class="total">
-            合计：<span class="total-amount">¥{{ cartStore.totalAmount }}</span>
+            合计：<span class="total-amount">¥{{ checkoutAmount }}</span>
           </div>
           <el-button type="primary" size="large" @click="openCheckout">去结算</el-button>
         </div>
@@ -137,7 +238,7 @@ const onSubmit = async (): Promise<void> => {
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="onSubmit">
-          提交订单（¥{{ cartStore.totalAmount }}）
+          提交订单（¥{{ checkoutAmount }}）
         </el-button>
       </template>
     </el-dialog>

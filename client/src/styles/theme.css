@@ -19,6 +19,9 @@
   /* 主色背景上的前景色（按钮文字 / 徽标 / 气泡等）。
      纯白是**有意**保留的：暖白放在主色上会显得发灰。 */
   --brand-on-primary: #ffffff;
+  /* 承载白字的实心色：白字压在 #ff6b35 上只有 2.84:1（不达 WCAG AA），
+     同色相加深到 #d1461d 后为 4.56:1。主色本身不变，只用于「有文字的实心块」。 */
+  --brand-primary-strong: #d1461d;
 
   /* ---------- 间距（8 的倍数，只约束自定义布局） ---------- */
   --space-1: 8px;
@@ -82,10 +85,19 @@
   --el-border-color-light: #ece8e2;
   --el-border-color-lighter: #f1eee9;
 
-  /* ---------- 圆角：按钮 8px，小控件 6px ---------- */
+  /* ---------- 圆角：按钮 8px，小控件 6px，卡片 12px ---------- */
   --el-border-radius-small: 6px;
   --el-border-radius-base: 8px;
   --el-border-radius-round: 999px;
+  /* 卡片圆角必须覆盖 EP 自己的 --el-card-border-radius（默认 4px），
+     否则 el-card 不会跟随上面的 base 变量，全站卡片仍是尖角。 */
+  --el-card-border-radius: 12px;
+  --el-card-padding: 16px;
+  --el-dialog-border-radius: 12px;
+
+  /* 星级：EP 默认金黄 #f7ba2a 与暖橙主色冲突，改为跟随主色 */
+  --el-rate-fill-color: var(--el-color-primary);
+  --el-rate-void-color: var(--el-border-color);
 
   /* ---------- 阴影：统一微阴影，避免各处写死 ---------- */
   --el-box-shadow-lighter: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -93,6 +105,23 @@
   --el-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   /* 悬浮态加深 */
   --el-box-shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 实心主按钮：把「承载白字」的这一档加深。
+   品牌主色 #ff6b35 继续用于图标 / 描边 / 进度条 / 徽标等非文字场景；
+   只有真正放白字的实心按钮才变深，保证 4.5:1 可读性。
+   hover 继续加深（而不是 EP 默认的变浅），避免 hover 后对比度反而更差。 */
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  --el-button-bg-color: var(--brand-primary-strong);
+  --el-button-border-color: var(--brand-primary-strong);
+  --el-button-hover-bg-color: #b93d18;
+  --el-button-hover-border-color: #b93d18;
+  --el-button-active-bg-color: #a13614;
+  --el-button-active-border-color: #a13614;
+  /* 禁用态改用浅底 + 深字，而不是「浅底 + 白字」（后者几乎看不见） */
+  --el-button-disabled-bg-color: #ffd3c2;
+  --el-button-disabled-border-color: #ffd3c2;
+  --el-button-disabled-text-color: #8a3a18;
 }
 
 /* 页面底色与正文字体。

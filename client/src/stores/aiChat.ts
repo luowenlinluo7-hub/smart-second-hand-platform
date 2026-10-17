@@ -1,11 +1,13 @@
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { AiChatAbortError, streamAiChat, type AiChatEvent } from '@/api/aiChat'
 import type { Product } from '@/types/api'
+import { readCurrentUserId, scopedStorageKey } from '@/utils/currentUser'
 
 // 带版本号的 key：将来消息结构变更时，直接换新 key，
 // 老数据自然失效，不会因为格式不兼容导致页面报错。
-const CHAT_KEY = 'ai-chat-v1'
+// 实际存储键会再拼上用户 id（见 storageKey），避免多人共用一个浏览器时串会话。
+const CHAT_KEY_PREFIX = 'ai-chat-v1'
 
 // 本地最多保留多少条消息，避免 localStorage 无限增长
 const MAX_STORED_MESSAGES = 50
@@ -59,8 +61,8 @@ const createAssistantMessage = (): AiChatMessage => ({
 })
 
 // 读取本地记录：任何解析异常都退回空数组，不让坏数据把助手整个卡死
-const readMessages = (): AiChatMessage[] => {
-  const raw = localStorage.getItem(CHAT_KEY)
+const readMessages = (key: string): AiChatMessage[] => {
+  const raw = localStorage.getItem(key)
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -79,7 +81,12 @@ const readMessages = (): AiChatMessage[] => {
 }
 
 export const useAiChatStore = defineStore('aiChat', () => {
-  const messages = ref<AiChatMessage[]>(readMessages())
+  // 会话归属用户：刷新页面时直接载入当前登录用户自己的对话
+  let ownerId: string | null = readCurrentUserId()
+
+  const storageKey = (): string => scopedStorageKey(CHAT_KEY_PREFIX, ownerId)
+
+  const messages = ref<AiChatMessage[]>(readMessages(storageKey()))
   const isStreaming = ref(false)
   // 抽屉开合不持久化：刷新后默认收起，避免一进页面就被浮层挡住
   const drawerOpen = ref(false)
@@ -95,7 +102,7 @@ export const useAiChatStore = defineStore('aiChat', () => {
   const persist = (): void => {
     const trimmed = messages.value.slice(-MAX_STORED_MESSAGES)
     try {
-      localStorage.setItem(CHAT_KEY, JSON.stringify(trimmed))
+      localStorage.setItem(storageKey(), JSON.stringify(trimmed))
     } catch {
       // 超出配额等情况忽略即可，不影响会话本身
     }
@@ -205,7 +212,10 @@ export const useAiChatStore = defineStore('aiChat', () => {
       createdAt: Date.now(),
     })
 
-    const assistant = createAssistantMessage()
+    // 必须用 reactive 包装后再 push：
+    // push 进 ref 数组的是**原始对象**，而 applyEvent 直接改这个原始引用，
+    // 改原始对象不会触发 Vue 的响应式，导致流式过程中正文/思考/商品卡都不刷新。
+    const assistant = reactive(createAssistantMessage())
     messages.value.push(assistant)
     isStreaming.value = true
 
@@ -254,11 +264,23 @@ export const useAiChatStore = defineStore('aiChat', () => {
     stop()
     messages.value = []
     focusProductId.value = null
+    unreadCount.value = 0
     try {
-      localStorage.removeItem(CHAT_KEY)
+      localStorage.removeItem(storageKey())
     } catch {
       // 忽略
     }
+  }
+
+  // 切换账号（登录 / 退出）：中止进行中的流，清掉界面态，载入目标用户自己的会话
+  const switchUser = (nextUserId: string | null): void => {
+    if (nextUserId === ownerId) return
+    stop()
+    ownerId = nextUserId
+    messages.value = readMessages(storageKey())
+    focusProductId.value = null
+    unreadCount.value = 0
+    drawerOpen.value = false
   }
 
   const setFocusProduct = (productId: string | null): void => {
@@ -279,5 +301,6 @@ export const useAiChatStore = defineStore('aiChat', () => {
     stop,
     clear,
     setFocusProduct,
+    switchUser,
   }
 })

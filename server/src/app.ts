@@ -24,7 +24,20 @@ export const createApp = (): Express => {
   app.use(express.urlencoded({ extended: true }));
 
   // 上传图片静态托管：/uploads/xxx.jpg
-  app.use('/uploads', express.static(path.resolve(uploadDir)));
+  // 安全要点：上传目录与前端同源，因此必须禁止浏览器对文件内容做「嗅探执行」。
+  // - nosniff：不按内容猜类型，避免伪装成图片的 HTML 被当页面渲染
+  // - CSP sandbox + default-src 'none'：即使被当文档打开，也无法执行脚本 / 加载资源
+  app.use(
+    '/uploads',
+    express.static(path.resolve(uploadDir), {
+      index: false,
+      dotfiles: 'deny',
+      setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+      },
+    }),
+  );
 
   // 所有业务接口统一挂载在 /api 前缀下
   app.use('/api', apiRouter);
