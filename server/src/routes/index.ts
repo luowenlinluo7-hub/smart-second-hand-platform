@@ -7,6 +7,7 @@ import categoryRouter from './category';
 import orderRouter from './order';
 import productRouter from './product';
 import uploadRouter from './upload';
+import userRouter from './user';
 
 // /api 下的路由总入口，后续模块（auth / products / orders ...）都在此挂载
 const router = Router();
@@ -29,6 +30,8 @@ router.use('/auth', authRouter);
 router.use('/categories', categoryRouter);
 // 商品
 router.use('/products', productRouter);
+// 用户公开资料（卖家信息卡）
+router.use('/users', userRouter);
 // 订单
 router.use('/orders', orderRouter);
 // 图片上传

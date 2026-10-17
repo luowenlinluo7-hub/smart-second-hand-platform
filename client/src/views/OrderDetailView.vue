@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createReviews, getOrder, updateOrderStatus } from '@/api/order'
 import { ORDER_STATUS_LABEL } from '@/constants/status'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
 
@@ -109,8 +110,22 @@ onMounted(fetchOrder)
         <el-alert v-else type="info" :closable="false" title="该订单已取消，商品已重新上架" />
 
         <div class="meta">
-          <span>买家：{{ order.buyer.nickname || order.buyer.username }}</span>
-          <span>卖家：{{ order.seller.nickname || order.seller.username }}</span>
+          <span class="party">
+            <UserAvatar
+              :src="order.buyer.avatar"
+              :name="order.buyer.nickname || order.buyer.username"
+              :size="22"
+            />
+            买家：{{ order.buyer.nickname || order.buyer.username }}
+          </span>
+          <span class="party">
+            <UserAvatar
+              :src="order.seller.avatar"
+              :name="order.seller.nickname || order.seller.username"
+              :size="22"
+            />
+            卖家：{{ order.seller.nickname || order.seller.username }}
+          </span>
           <span>下单时间：{{ order.createdAt.slice(0, 19).replace('T', ' ') }}</span>
         </div>
       </el-card>
@@ -223,6 +238,11 @@ onMounted(fetchOrder)
   font-size: 13px;
   color: var(--el-text-color-secondary);
   flex-wrap: wrap;
+}
+.party {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .goods {

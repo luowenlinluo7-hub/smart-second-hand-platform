@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBuyerOrders, getSellerOrders, updateOrderStatus } from '@/api/order'
 import { ORDER_STATUS_LABEL, ORDER_STATUS_OPTIONS, ORDER_STATUS_TAG_TYPE } from '@/constants/status'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
 
@@ -114,6 +115,12 @@ const counterparty = (order: Order): string => {
   return user.nickname || user.username
 }
 
+// 对方头像：买家视角看卖家，卖家视角看买家
+const counterpartyAvatar = (order: Order): string | null => {
+  const user = role.value === 'buyer' ? order.seller : order.buyer
+  return user.avatar
+}
+
 const isSellerRole = computed(() => authStore.user?.role === 'SELLER')
 
 onMounted(() => {
@@ -149,7 +156,14 @@ onMounted(() => {
         <div v-for="order in list" :key="order.id" class="order-item">
           <div class="order-head">
             <span class="order-no">订单号：{{ order.orderNo }}</span>
-            <span class="counterparty">{{ role === 'buyer' ? '卖家' : '买家' }}：{{ counterparty(order) }}</span>
+            <span class="counterparty">
+              <UserAvatar
+                :src="counterpartyAvatar(order)"
+                :name="counterparty(order)"
+                :size="22"
+              />
+              <span>{{ role === 'buyer' ? '卖家' : '买家' }}：{{ counterparty(order) }}</span>
+            </span>
             <el-tag :type="ORDER_STATUS_TAG_TYPE[order.status]" size="small">
               {{ ORDER_STATUS_LABEL[order.status] }}
             </el-tag>
@@ -235,7 +249,11 @@ onMounted(() => {
 }
 
 .counterparty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex: 1;
+  min-width: 0;
 }
 
 .order-body {

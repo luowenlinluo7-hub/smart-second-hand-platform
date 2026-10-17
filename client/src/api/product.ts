@@ -1,5 +1,5 @@
 import { http } from './request'
-import type { Product, ProductQuery, MyProductListResult } from '@/types/api'
+import type { Product, ProductQuery, MyProductListResult, ProductReviewList } from '@/types/api'
 import type { PageResult } from '@/types/api'
 
 // 商品列表（分页 + 筛选）
@@ -52,3 +52,7 @@ export const uploadImages = (files: File[]) => {
   files.forEach((file) => formData.append('files', file))
   return http.post<{ urls: string[] }>('/upload', formData)
 }
+
+// 商品评价列表（公开）：含星级分布汇总
+export const getProductReviews = (id: string, params?: { page?: number; pageSize?: number }) =>
+  http.get<ProductReviewList>(`/products/${id}/reviews`, params as unknown as Record<string, unknown>)

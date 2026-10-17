@@ -711,6 +711,60 @@ async function main(): Promise<void> {
     reviewCount += 1;
   }
 
+  // ---------- 6.5 在售商品的演示评价 ----------
+  // 真实业务里，在售商品尚未成交，自然没有评价。
+  // 但商品详情页的「商品评价」板块需要可见内容，否则演示时永远是空状态。
+  //
+  // 做法：复用已完成的种子订单作为载体，为若干在售商品补一批历史评价。
+  // 只新增 Review 行，**不新增订单**，因此订单数 / GMV / 趋势图口径完全不受影响。
+  // 用确定性 id（seed-review-onsale-*）标记，便于幂等重建与清理。
+  const REVIEWED_SEED_ORDERS = HISTORY_ORDERS.filter((o) => o.status === 'REVIEWED');
+
+  const ON_SALE_REVIEW_PLAN: readonly { productIndex: number; ratings: readonly number[] }[] = [
+    { productIndex: 10, ratings: [5, 4, 5] }, // seed-prod-11 联想拯救者
+    { productIndex: 11, ratings: [5, 5, 4] }, // seed-prod-12 华硕天选
+    { productIndex: 12, ratings: [5, 4, 4] }, // seed-prod-13 戴尔游匣
+    { productIndex: 0, ratings: [5, 4, 5] }, // seed-prod-01 iPhone 13
+    { productIndex: 4, ratings: [4, 5] }, // seed-prod-05 MacBook Air M1
+    { productIndex: 7, ratings: [5, 3, 4] }, // seed-prod-08 戴森 V8
+    { productIndex: 13, ratings: [4, 5] }, // seed-prod-14 机械革命
+  ];
+
+  await prisma.review.deleteMany({ where: { id: { startsWith: 'seed-review-onsale-' } } });
+
+  let onSaleReviewCount = 0;
+  let planCursor = 0;
+
+  for (const plan of ON_SALE_REVIEW_PLAN) {
+    const product = products[plan.productIndex];
+    if (!product) continue;
+
+    for (const [i, rating] of plan.ratings.entries()) {
+      const order = REVIEWED_SEED_ORDERS[planCursor % REVIEWED_SEED_ORDERS.length];
+      planCursor += 1;
+      if (!order) continue;
+
+      // 评价时间：越靠后的条目越早，形成自然的时间顺序
+      const createdAt = hoursAgo(24 * (6 + i * 3) + plan.productIndex);
+
+      await prisma.review.create({
+        data: {
+          id: `seed-review-onsale-${String(onSaleReviewCount + 1).padStart(2, '0')}`,
+          orderId: order.id,
+          productId: product.id,
+          reviewerId: order.buyerId,
+          revieweeId: seller.id,
+          rating,
+          content: REVIEW_TEXTS[(plan.productIndex + i) % REVIEW_TEXTS.length],
+          images: i === 0 ? [`/demo/p${(plan.productIndex % DEMO_IMAGE_COUNT) + 1}.jpg`] : [],
+          status: 'VISIBLE',
+          createdAt,
+        },
+      });
+      onSaleReviewCount += 1;
+    }
+  }
+
   // ---------- 7. 清理陈旧种子数据 ----------
   // 订单/商品数量将来若调整（比如从 20 条扩到 50 条），旧 id 会残留在库里。
   // 这里只删「seed- 前缀但已不在当前生成集合里」的记录，绝不触碰其他数据。
@@ -734,6 +788,7 @@ async function main(): Promise<void> {
   console.log(`  商品    ${products.length} 个在售 + ${historyProducts.size} 个历史成交（SOLD，不参与前台）`);
   console.log(`  订单    ${HISTORY_ORDERS.length} 条（覆盖全部状态，时间分布在近 30 天，供数据看板使用）`);
   console.log(`  评价    ${reviewCount} 条（来自已评价订单）`);
+  console.log(`          + ${onSaleReviewCount} 条在售商品演示评价（供详情页评价板块展示）`);
   console.log('[seed] 演示密码：admin=Admin@123456  seller_li=Seller@123456  user_*=User@123456');
 }
 

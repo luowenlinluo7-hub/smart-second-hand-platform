@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import * as productService from '../services/product.service';
+import * as reviewService from '../services/review.service';
 import { ApiError } from '../utils/ApiError';
 import { success } from '../utils/response';
 import { imageUrlListSchema } from '../utils/validators';
@@ -53,6 +54,12 @@ const listQuerySchema = z.object({
   keyword: z.string().trim().max(50, '关键词最多 50 字').optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// 商品评价：每页最多 50 条，避免一次拉全部
+const reviewListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(10),
 });
 
 // 我的商品：status 不传返回全部状态，由前端 Tab 切换
@@ -146,6 +153,13 @@ export const relist = async (req: Request, res: Response): Promise<void> => {
   const userId = getUserId(req);
   const product = await productService.relistProduct(String(req.params.id), userId);
   res.json(success(product, '已重新提交审核'));
+};
+
+// GET /api/products/:id/reviews —— 商品评价列表（公开，仅返回 VISIBLE）
+export const reviews = async (req: Request, res: Response): Promise<void> => {
+  const query = reviewListQuerySchema.parse(req.query);
+  const result = await reviewService.listProductReviews(String(req.params.id), query);
+  res.json(success(result));
 };
 
 function getUserId(req: Request): string {

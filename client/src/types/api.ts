@@ -261,3 +261,54 @@ export interface Order {
   buyer: OrderUserBrief
   seller: OrderUserBrief
 }
+
+// ---------- 商品评价 ----------
+
+// 评价人（仅公开字段）
+export interface ReviewReviewer {
+  id: string
+  username: string
+  nickname: string | null
+  avatar: string | null
+}
+
+export interface ProductReview {
+  id: string
+  rating: number
+  content: string | null
+  images: string[]
+  createdAt: string
+  reviewer: ReviewReviewer
+}
+
+// 星级分布，键为 1~5
+export type RatingDistribution = Record<'1' | '2' | '3' | '4' | '5', number>
+
+export interface ReviewSummary {
+  // 无评价时为 null（不要当成 0 分展示）
+  avgRating: number | null
+  count: number
+  distribution: RatingDistribution
+}
+
+export interface ProductReviewList extends PageResult<ProductReview> {
+  summary: ReviewSummary
+}
+
+// ---------- 卖家公开资料 ----------
+
+export interface SellerStats {
+  onSaleCount: number
+  soldCount: number
+  reviewCount: number
+  avgRating: number | null
+}
+
+export interface SellerProfile {
+  id: string
+  username: string
+  nickname: string | null
+  avatar: string | null
+  createdAt: string
+  stats: SellerStats
+}

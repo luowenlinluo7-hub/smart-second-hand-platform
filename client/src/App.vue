@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import AiAssistant from '@/components/AiAssistant.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -34,22 +35,7 @@ const roleLabel = computed<string>(() => {
   }
 })
 
-// 没有头像（或头像加载失败）时，用昵称首字兜底：
-// 中文取第一个字，英文转大写首字母，避免出现空白圆圈
-const avatarText = computed<string>(() => displayName.value.trim().charAt(0).toUpperCase() || '?')
-
-// 头像地址失效时降级为首字母，避免 header 出现碎图
-const avatarBroken = ref(false)
-watch(
-  () => authStore.user?.avatar,
-  () => {
-    avatarBroken.value = false
-  },
-)
-const avatarSrc = computed<string | undefined>(() => {
-  const url = authStore.user?.avatar
-  return url && !avatarBroken.value ? url : undefined
-})
+// 头像与首字兜底统一由 UserAvatar 组件处理（含加载失败降级）
 
 const handleLogout = (): void => {
   authStore.logout()
@@ -87,14 +73,7 @@ const handleLogout = (): void => {
         <template v-if="authStore.isLoggedIn && authStore.user">
           <el-dropdown trigger="click">
             <button type="button" class="user-trigger">
-              <el-avatar
-                :size="30"
-                :src="avatarSrc"
-                class="user-avatar"
-                @error="avatarBroken = true"
-              >
-                {{ avatarText }}
-              </el-avatar>
+              <UserAvatar :src="authStore.user.avatar" :name="displayName" :size="30" />
               <span class="nickname">{{ displayName }}</span>
             </button>
             <template #dropdown>
@@ -153,19 +132,48 @@ const handleLogout = (): void => {
 
 .nav {
   display: flex;
-  gap: 16px;
+  gap: var(--space-1);
   flex: 1;
 }
 
+/* 导航项：字重与字号略加强，避免短词显得单薄；
+   激活态除了主色文字，再用底部 2px 短下划线做形状区分
+   （只靠颜色区分对色觉障碍不友好） */
 .nav a {
+  position: relative;
+  padding: 6px 8px;
+  border-radius: var(--el-border-radius-base);
   color: var(--el-text-color-regular);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   text-decoration: none;
   white-space: nowrap;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.nav a:hover {
+  color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
 }
 
 .nav a.router-link-active {
   color: var(--el-color-primary);
   font-weight: 600;
+}
+
+.nav a.router-link-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background-color: var(--el-color-primary);
+  transform: translateX(-50%);
 }
 
 .right {
@@ -204,14 +212,6 @@ const handleLogout = (): void => {
 .user-trigger:focus-visible {
   outline: 2px solid var(--el-color-primary);
   outline-offset: 2px;
-}
-
-.user-avatar {
-  flex: 0 0 auto;
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .menu-role {

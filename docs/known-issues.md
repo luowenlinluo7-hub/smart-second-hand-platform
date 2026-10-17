@@ -8,17 +8,17 @@
 
 ## 结论摘要
 
-全量 E2E（`npm run test:e2e`）当前结果：**77 通过 / 0 失败 / 2 跳过**。
+全量 E2E（`npm run test:e2e`）当前结果：**81 通过 / 0 失败 / 2 跳过**。
 
 测试过程中**没有发现阻断级（🔴）缺陷**。下面 5 条是评审代码与实测过程中确认的
-🟡 级问题：它们不影响主流程走通，但在多用户并发或完整演示场景下会暴露，
-因此如实记录并给出修复方向，本阶段**有意不修**（理由逐条说明）。
+🟡 级问题：不影响主流程走通，但在多用户并发或完整演示场景下会暴露。
+其中第 3 条已在「评价展示闭环」迭代中修复，其余仍如实记录并给出修复方向。
 
 | # | 严重度 | 位置 | 问题 | 处置 |
 | --- | --- | --- | --- | --- |
 | 1 | 🟡 | [order.service.ts:223](../server/src/services/order.service.ts) | 状态流转存在并发竞态 | 记录不改 |
 | 2 | 🟡 | [order.service.ts:157](../server/src/services/order.service.ts) | 下单置 `SOLD` 但不递减 `stock` | 记录不改 |
-| 3 | 🟡 | 全库（仅 `POST /orders/:id/reviews`） | 评价只写不读，无任何展示入口 | 记录不改 |
+| 3 | ✅ | 评价展示 | 评价只写不读，无任何展示入口 | **已修复** |
 | 4 | 🟡 | [api-contract.md](../server/docs/api-contract.md) | 契约里有 2 个接口未实现 | 记录不改 |
 | 5 | ⚪ | [dashboard.service.ts](../server/src/services/dashboard.service.ts) | 趋势图日期标签省略年份 | 记录不改 |
 
@@ -90,36 +90,31 @@ const updated = await prisma.$transaction(async (tx) => {
 
 ---
 
-## 3. 🟡 评价数据「只写不读」，没有任何展示入口
+## 3. ✅ 评价数据「只写不读」 —— 已修复
 
-**位置**：全库。除 `POST /api/orders/:id/reviews` 外，没有任何接口读取 `Review`。
+**原问题**：除 `POST /api/orders/:id/reviews` 外，没有任何接口读取 `Review`；
+`Review` 表有完整模型（含 `status: ReviewStatus` 默认 `VISIBLE`）与 34 条数据，
+但用户在提交评价后**再也看不到内容**，商品详情也没有评分与评价列表，
+`ReviewStatus`（可见 / 隐藏）字段完全未被使用。
 
-**现象**：
+**修复内容**：
 
-- `Review` 表有完整模型（含 `status: ReviewStatus` 默认 `VISIBLE`）、seed 里造了 34 条评价，
-  但**后端没有任何读取接口**，`orderInclude` 也不含 `reviews`。
-- 前端 `OrderDetailView.vue` 只有「提交评价」表单项，提交后订单变成「已评价」，
-  评价内容再也看不到；商品详情页没有评分与评价列表。
-- 因此 `ReviewStatus`（可见 / 隐藏）字段完全未被使用。
+1. 后端新增 `GET /api/products/:id/reviews`（公开，分页，仅返回 `status = VISIBLE`），
+   含评价人公开信息与 `summary`（平均分 + 星级分布）；契约见
+   [api-contract.md 4.3.2](../server/docs/api-contract.md)
+2. 后端新增 `GET /api/users/:id/profile`（公开，卖家统计：在售 / 成交 / 评价数 / 平均分），
+   供商品详情页的卖家信息卡使用；契约见 [api-contract.md 4.3.3](../server/docs/api-contract.md)
+3. 前端商品详情页新增「卖家信息卡」（头像 / 昵称 / 在售与成交数 / 信誉分）与
+   「商品评价」板块（综合评分、星级分布条、评价列表含头像/星级/内容/晒图/时间、分页）
+4. 全站头像打通：header、商品详情卖家卡、评价列表、订单列表与详情的买卖双方
+5. seed 为 7 件在售商品补了 19 条演示评价（用确定性 id `seed-review-onsale-*`，可幂等重建）。
+   **只新增 Review 行，不新增订单**，因此订单数 / GMV / 趋势图口径完全不受影响
 
-**复现**：登录 → 我的订单 → 完成后提交评价 → 成功；随后打开商品详情 / 订单详情 / 个人中心，
-都没有任何地方能看到这条评价。
+**验证**：E2E 新增 4 条用例（评价结构 + 星级分布之和等于总数 + 隐私字段不外泄 + 两个 404），
+全量 **81 通过 / 0 失败**。
 
-**为什么不算缺陷**：`api-contract.md` 对 `GET /orders/:id` 的承诺是
-「含 `items` 快照、买卖双方信息」，并**没有**承诺返回 `reviews`；实现与契约一致。
-所以这是**功能缺口**而非实现错误。本阶段范围是逻辑闭环测试，新增读取接口 + 评价展示 UI
-会明显扩大改动面，故记录待办。
-
-**E2E 如何覆盖**：因为接口读不回来，`scripts/e2e/suites/order.js` 里的
-「评价确实落库」用例改为**直连本地数据库**核对 `review` 行数
-（仅在目标为本地地址时启用，指向公网时自动跳过）。这样「接口返回成功」与
-「数据真的写进去了」两件事都被验证到。
-
-**建议修复方向**：
-
-1. 后端：新增 `GET /api/products/:id/reviews`（分页，仅返回 `status = VISIBLE`）；
-   seed 已预留索引 `reviews(productId, status)`，可直接命中。
-2. 前端：商品详情页加评价列表与平均分；`OrderDetailView` 在状态为 `REVIEWED` 时展示已提交内容。
+**仍未覆盖**：`PATCH /api/admin/reviews/:id/status`（管理员隐藏评价）依然未实现，
+因此 `ReviewStatus` 目前只用于过滤，没有任何写入入口。见问题 4。
 
 ---
 
@@ -130,12 +125,11 @@ const updated = await prisma.$transaction(async (tx) => {
 | 契约中的接口 | 实现状态 |
 | --- | --- |
 | `GET /api/admin/orders` | 未实现（`server/src/routes/admin.ts` 只有 dashboard / products / audit） |
-| `PATCH /api/admin/reviews/:id/status` | 未实现（与问题 3 相关，评价可见性治理未落地） |
+| `PATCH /api/admin/reviews/:id/status` | 未实现（评价已能展示，但管理员还没有「隐藏违规评价」的入口） |
 
 **影响范围**：契约文档超前于实现。前端没有调用这两个接口，因此不影响任何现有页面。
 
-**为什么不修**：属于新功能开发，不属于闭环测试阶段的范围；且问题 3 未解决时，
-审核评价可见性也没有实际意义（前端根本不展示评价）。
+**为什么不修**：属于新功能开发，不属于当前 UI 精修阶段的范围。
 
 **建议修复方向**：要么按契约补齐实现，要么在契约文档中把这 2 行标注为「规划中」，
 避免后续接手的人误以为已可用。

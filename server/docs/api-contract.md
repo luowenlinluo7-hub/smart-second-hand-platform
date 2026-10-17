@@ -192,6 +192,7 @@ JSON.stringify(price)   // "1899"
 | GET | `/products` | 公开 | `keyword?`(模糊匹配 title/description) `categoryId?` `condition?` `priceMin?` `priceMax?` `page?` `pageSize?` | 分页信封，仅返回 `ON_SALE` |
 | GET | `/products/mine` | 登录 | `status?`(`DRAFT`\|`PENDING_REVIEW`\|`ON_SALE`\|`SOLD`\|`OFF_SHELF`\|`REJECTED`) `page?` `pageSize?` | 分页信封 + `counts`（各状态数量），**返回全部状态** |
 | GET | `/products/:id` | 公开 | — | `Product`（含 `seller`、`category`，`viewCount` 自增 1） |
+| GET | `/products/:id/reviews` | 公开 | `page?`(默认 1) `pageSize?`(默认 10，上限 50) | 分页信封 + `summary`（见 4.3.2） |
 | POST | `/products` | SELLER | `title` `description?` `price` `originalPrice?` `images[]` `condition` `categoryId` `stock?` | `Product`（**进入待审核 `PENDING_REVIEW`**） |
 | PUT | `/products/:id` | SELLER(本人) | 可编辑字段（部分更新） | `Product`（`SOLD` / `PENDING_REVIEW` 状态拒绝编辑，返回 40900） |
 | DELETE | `/products/:id` | SELLER(本人) | — | `null`（软删：置 `OFF_SHELF` 并清空 `publishedAt`；`SOLD` 拒绝，返回 40900） |
@@ -204,7 +205,6 @@ JSON.stringify(price)   // "1899"
 > ⚠️ 路由顺序：`/products/mine` 必须注册在 `/products/:id` **之前**，否则 `mine` 会被当作商品 id。
 
 ### 4.3.1 图片上传 · `/api/v1/upload`
-
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
 | POST | `/upload` | 登录 | `multipart/form-data`，字段 `files`（多文件，≤9 张，单张 ≤5MB） | `{ urls: string[] }` |
@@ -219,6 +219,69 @@ JSON.stringify(price)   // "1899"
 >
 > ⚠️ 后端校验**不可用** `z.string().url()` —— 它要求完整协议，会拒绝站内相对路径。
 > 统一使用 `server/src/utils/validators.ts` 的 `imageUrlSchema`。
+
+### 4.3.2 商品评价 · `GET /api/v1/products/:id/reviews`
+
+公开接口，未登录也可访问（买家决策依据）。**只返回 `status = VISIBLE` 的评价**，
+被管理员隐藏的评价既不出现也不计入统计。
+
+| 参数 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `page` | int ≥ 1 | 1 | 页码 |
+| `pageSize` | int 1~50 | 10 | 每页条数 |
+
+响应 `data`：分页信封 + `summary`
+
+```json
+{
+  "list": [
+    {
+      "id": "seed-review-onsale-01",
+      "rating": 5,
+      "content": "卖家回复及时，配件齐全，整体满意。",
+      "images": ["/demo/p11.jpg"],
+      "createdAt": "2026-10-11T00:44:44.885Z",
+      "reviewer": { "id": "seed-user-01", "username": "user_zhang", "nickname": "张三", "avatar": null }
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "pageSize": 5,
+  "summary": {
+    "avgRating": 4.7,
+    "count": 3,
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 1, "5": 2 }
+  }
+}
+```
+
+> - `summary` 基于**全部**可见评价统计，与当前分页无关；
+> - 无评价时 `avgRating` 为 `null`（不是 `0`），前端不要显示成「0.0 分」；
+> - `reviewer` 只含公开字段，**不含 email / phone / passwordHash**；
+> - 商品不存在返回 `40400`；
+> - 评价按 `createdAt` 倒序。
+
+### 4.3.3 卖家公开资料 · `GET /api/v1/users/:id/profile`
+
+公开接口，供商品详情页的「卖家信息卡」使用。
+
+响应 `data`：
+
+```json
+{
+  "id": "seed-user-seller",
+  "username": "seller_li",
+  "nickname": "卖家小李",
+  "avatar": null,
+  "createdAt": "2026-10-07T14:58:11.816Z",
+  "stats": { "onSaleCount": 14, "soldCount": 50, "reviewCount": 53, "avgRating": 4 }
+}
+```
+
+> - `stats.onSaleCount` = 在售商品数，`soldCount` = 已售出数；
+> - `stats.avgRating` 来自该用户收到的 **VISIBLE** 评价，无评价时为 `null`；
+> - 只返回公开字段，**不含 email / phone / passwordHash / status**；
+> - 用户不存在返回 `40400`。
 
 ### 4.4 交易 · `/api/v1/orders`
 

@@ -12,6 +12,9 @@ router.get('/mine', authenticate, productController.mine);
 
 router.get('/:id', productController.detail);
 
+// 商品评价：公开接口，未登录也能查看（买家决策的重要依据）
+router.get('/:id/reviews', productController.reviews);
+
 // 发布需 SELLER 角色
 router.post('/', authenticate, requireRole('SELLER'), productController.create);
 

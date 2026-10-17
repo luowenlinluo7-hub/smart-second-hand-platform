@@ -119,6 +119,76 @@ const run = async () => {
     assert.biz(res, codes.NOT_FOUND, 404, '不存在的商品');
   });
 
+  // ---------- 商品评价（公开）----------
+  await test('商品评价接口返回分页信封 + 星级汇总', async () => {
+    // 用 seed 里带演示评价的在售商品
+    const res = await api.get('/api/products/seed-prod-11/reviews?page=1&pageSize=5');
+    assert.biz(res, 0, 200, '商品评价列表');
+    assert.envelope(res, '商品评价列表');
+    assert.pageShape(res.body.data, '商品评价列表');
+
+    const { summary } = res.body.data;
+    assert.ok(summary && typeof summary === 'object', '应返回 summary');
+    assert.ok(
+      summary.avgRating === null || (typeof summary.avgRating === 'number' && summary.avgRating >= 0),
+      `avgRating 应为数字或 null，实际 ${JSON.stringify(summary.avgRating)}`,
+    );
+    assert.equal(typeof summary.count, 'number', 'summary.count 类型');
+    for (const star of ['1', '2', '3', '4', '5']) {
+      assert.ok(star in summary.distribution, `summary.distribution 缺少键 ${star}`);
+    }
+    // 分布之和必须等于总数，否则统计口径不一致
+    const distSum = ['1', '2', '3', '4', '5'].reduce(
+      (acc, s) => acc + summary.distribution[s],
+      0,
+    );
+    assert.equal(distSum, summary.count, '星级分布之和应等于评价总数');
+
+    // 评价人只应有公开字段
+    for (const item of res.body.data.list) {
+      assert.ok(item.reviewer && item.reviewer.id, '评价应包含 reviewer');
+      assert.ok(!('email' in item.reviewer), '评价人不应暴露 email');
+      assert.ok(!('phone' in item.reviewer), '评价人不应暴露 phone');
+    }
+    assert.noPasswordHash(res, '商品评价列表');
+  });
+
+  await test('不存在商品的评价返回 404', async () => {
+    const res = await api.get('/api/products/not-a-real-product-id/reviews');
+    assert.biz(res, codes.NOT_FOUND, 404, '不存在商品的评价');
+  });
+
+  // ---------- 卖家公开资料 ----------
+  await test('卖家公开资料返回统计且不泄露私密字段', async () => {
+    const res = await api.get('/api/users/seed-user-seller/profile');
+    assert.biz(res, 0, 200, '卖家公开资料');
+    assert.envelope(res, '卖家公开资料');
+
+    const data = res.body.data;
+    assert.ok(data.id && data.username, '应返回用户标识');
+    assert.ok(data.stats && typeof data.stats === 'object', '应返回 stats');
+    for (const key of ['onSaleCount', 'soldCount', 'reviewCount']) {
+      assert.ok(
+        Number.isInteger(data.stats[key]) && data.stats[key] >= 0,
+        `stats.${key} 应为非负整数，实际 ${JSON.stringify(data.stats[key])}`,
+      );
+    }
+    assert.ok(
+      data.stats.avgRating === null || typeof data.stats.avgRating === 'number',
+      'stats.avgRating 应为数字或 null',
+    );
+    // 安全不变量：公开资料不得带出隐私字段
+    for (const forbidden of ['email', 'phone', 'passwordHash', 'status']) {
+      assert.ok(!(forbidden in data), `卖家公开资料不应包含 ${forbidden}`);
+    }
+    assert.noPasswordHash(res, '卖家公开资料');
+  });
+
+  await test('不存在的用户资料返回 404', async () => {
+    const res = await api.get('/api/users/not-a-real-user-id/profile');
+    assert.biz(res, codes.NOT_FOUND, 404, '不存在的用户资料');
+  });
+
   // ---------- 编辑权限 ----------
   await test('编辑他人商品被拒（403）', async () => {
     const res = await api.put(`/api/products/${context.product.id}`, {

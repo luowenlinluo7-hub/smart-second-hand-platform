@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getProduct } from '@/api/product'
+import { getProduct, getProductReviews } from '@/api/product'
+import { getUserProfile } from '@/api/user'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAiChatStore } from '@/stores/aiChat'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { CONDITION_LABEL } from '@/constants/status'
-import type { Product } from '@/types/api'
+import type { Product, ProductReview, ReviewSummary, SellerProfile } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +19,72 @@ const cartStore = useCartStore()
 
 const loading = ref(false)
 const product = ref<Product | null>(null)
+
+// 卖家信息卡：seller 负责统计数字，头像/昵称先用商品自带的兜底
+const seller = ref<SellerProfile | null>(null)
+
+// 商品评价
+const reviews = ref<ProductReview[]>([])
+const reviewSummary = ref<ReviewSummary | null>(null)
+const reviewTotal = ref(0)
+const reviewPage = ref(1)
+const reviewPageSize = 5
+const reviewLoading = ref(false)
+
+const sellerName = computed<string>(() => {
+  const s = seller.value ?? product.value?.seller
+  if (!s) return ''
+  return s.nickname || s.username
+})
+
+// 头像优先取统计接口的（更新），回退到商品里嵌套的卖家信息
+const sellerAvatar = computed<string | null>(
+  () => seller.value?.avatar ?? product.value?.seller.avatar ?? null,
+)
+
+const formatDate = (iso: string): string => {
+  const d = new Date(iso)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// 某星级占比（0~100），用于分布条
+const starPercent = (star: number): number => {
+  const summary = reviewSummary.value
+  if (!summary || summary.count === 0) return 0
+  const key = String(star) as keyof ReviewSummary['distribution']
+  return Math.round((summary.distribution[key] / summary.count) * 100)
+}
+
+const starCount = (star: number): number => {
+  const summary = reviewSummary.value
+  if (!summary) return 0
+  const key = String(star) as keyof ReviewSummary['distribution']
+  return summary.distribution[key]
+}
+
+const loadReviews = async (targetPage: number): Promise<void> => {
+  if (!product.value) return
+  reviewLoading.value = true
+  try {
+    const result = await getProductReviews(product.value.id, {
+      page: targetPage,
+      pageSize: reviewPageSize,
+    })
+    reviews.value = result.list
+    reviewTotal.value = result.total
+    reviewSummary.value = result.summary
+    reviewPage.value = result.page
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '评价加载失败')
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+const onReviewPageChange = (page: number): void => {
+  void loadReviews(page)
+}
 
 // 加入购物车前的统一校验
 const ensureBuyable = (): boolean => {
@@ -71,6 +139,16 @@ onMounted(async () => {
   aiChat.setFocusProduct(String(route.params.id))
   try {
     product.value = await getProduct(String(route.params.id))
+
+    // 卖家统计与评价并行拉取：任一失败都不应影响商品主体展示
+    void getUserProfile(product.value.sellerId)
+      .then((profile) => {
+        seller.value = profile
+      })
+      .catch(() => {
+        seller.value = null
+      })
+    void loadReviews(1)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '加载失败')
   } finally {
@@ -143,6 +221,120 @@ onUnmounted(() => {
           </el-col>
         </el-row>
       </el-card>
+
+      <!-- 卖家信息卡：二手交易的核心信任来源 -->
+      <el-card shadow="never" class="section-card">
+        <div class="seller-card">
+          <UserAvatar :src="sellerAvatar" :name="sellerName" :size="52" />
+          <div class="seller-meta">
+            <div class="seller-name">{{ sellerName }}</div>
+            <div class="seller-sub">
+              <template v-if="seller">
+                在售 {{ seller.stats.onSaleCount }} 件 · 历史成交 {{ seller.stats.soldCount }} 件
+              </template>
+              <template v-else>卖家信息加载中…</template>
+            </div>
+          </div>
+          <div class="seller-score">
+            <template v-if="seller && seller.stats.avgRating !== null">
+              <span class="score-num">{{ seller.stats.avgRating.toFixed(1) }}</span>
+              <span class="score-desc">
+                <el-rate :model-value="seller.stats.avgRating" disabled allow-half size="small" />
+                {{ seller.stats.reviewCount }} 条评价
+              </span>
+            </template>
+            <span v-else class="score-desc">暂无卖家评价</span>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 商品评价 -->
+      <el-card shadow="never" class="section-card">
+        <template #header>
+          <div class="section-head">
+            <span class="section-title">商品评价</span>
+            <span v-if="reviewSummary && reviewSummary.count > 0" class="section-sub">
+              共 {{ reviewSummary.count }} 条
+            </span>
+          </div>
+        </template>
+
+        <div v-loading="reviewLoading" class="review-wrap">
+          <el-empty v-if="!reviewLoading && reviewTotal === 0" description="该商品还没有评价" />
+
+          <template v-else>
+            <!-- 评分概览：平均分 + 星级分布 -->
+            <div v-if="reviewSummary" class="review-summary">
+              <div class="summary-score">
+                <span class="summary-num">{{ reviewSummary.avgRating?.toFixed(1) ?? '—' }}</span>
+                <el-rate
+                  :model-value="reviewSummary.avgRating ?? 0"
+                  disabled
+                  allow-half
+                  class="summary-rate"
+                />
+                <span class="summary-label">综合评分</span>
+              </div>
+              <div class="summary-dist">
+                <div v-for="star in [5, 4, 3, 2, 1]" :key="star" class="dist-row">
+                  <span class="dist-star">{{ star }} 星</span>
+                  <el-progress
+                    :percentage="starPercent(star)"
+                    :show-text="false"
+                    :stroke-width="6"
+                    class="dist-bar"
+                  />
+                  <span class="dist-count">{{ starCount(star) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 评价列表 -->
+            <div class="review-list">
+              <div v-for="item in reviews" :key="item.id" class="review-item">
+                <UserAvatar
+                  :src="item.reviewer.avatar"
+                  :name="item.reviewer.nickname || item.reviewer.username"
+                  :size="36"
+                />
+                <div class="review-main">
+                  <div class="review-top">
+                    <span class="review-user">
+                      {{ item.reviewer.nickname || item.reviewer.username }}
+                    </span>
+                    <el-rate :model-value="item.rating" disabled />
+                    <span class="review-time">{{ formatDate(item.createdAt) }}</span>
+                  </div>
+                  <p class="review-text">{{ item.content || '该用户没有填写评价内容' }}</p>
+                  <div v-if="item.images && item.images.length" class="review-images">
+                    <el-image
+                      v-for="(img, i) in item.images"
+                      :key="i"
+                      :src="img"
+                      :preview-src-list="item.images"
+                      :initial-index="i"
+                      fit="cover"
+                      class="review-img"
+                      preview-teleported
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="reviewTotal > reviewPageSize" class="review-pager">
+              <el-pagination
+                small
+                layout="prev, pager, next"
+                :current-page="reviewPage"
+                :page-size="reviewPageSize"
+                :total="reviewTotal"
+                @current-change="onReviewPageChange"
+              />
+            </div>
+          </template>
+        </div>
+      </el-card>
     </template>
   </div>
 </template>
@@ -151,6 +343,210 @@ onUnmounted(() => {
 .detail-page {
   max-width: 1000px;
   margin: 0 auto;
+}
+
+/* 详情页下方各区块的统一样式：12px 圆角 + 微阴影 */
+.section-card {
+  margin-top: var(--space-2);
+  border-radius: 12px;
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.section-title {
+  font-family: var(--font-title);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.section-sub {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* ---------- 卖家信息卡 ---------- */
+.seller-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.seller-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.seller-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.seller-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.seller-score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.seller-score .score-num {
+  font-family: var(--font-title);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--el-color-primary);
+  line-height: 1;
+}
+
+.score-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* ---------- 评价区 ---------- */
+.review-wrap {
+  min-height: 80px;
+}
+
+.review-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.summary-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+.summary-num {
+  font-family: var(--font-title);
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--el-color-primary);
+  line-height: 1.1;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.summary-dist {
+  flex: 1;
+  min-width: 0;
+}
+
+.dist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.dist-star {
+  flex: 0 0 36px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.dist-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.dist-count {
+  flex: 0 0 28px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.review-list {
+  padding-top: var(--space-2);
+}
+
+.review-item {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+.review-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.review-user {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.review-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.review-text {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--el-text-color-regular);
+  word-break: break-word;
+}
+
+.review-images {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.review-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.review-pager {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-2);
 }
 
 .carousel-img {
