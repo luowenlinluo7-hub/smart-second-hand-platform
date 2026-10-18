@@ -1,0 +1,148 @@
+name: CI
+
+# 每次推送到 main、以及所有 Pull Request 都跑一遍：
+#   1) static —— 双端类型检查 + 构建（快，先挡住明显错误）
+#   2) e2e    —— 起一个真实 MySQL，跑迁移 + seed + 81 条端到端用例
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支的新提交会取消上一次未跑完的任务，省额度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  static:
+    name: 类型检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: 安装后端依赖
+        working-directory: server
+        run: npm ci
+
+      - name: 生成 Prisma Client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: 后端类型检查
+        working-directory: server
+        run: npm run typecheck
+
+      - name: 后端构建
+        working-directory: server
+        run: npm run build
+
+      - name: 安装前端依赖
+        working-directory: client
+        run: npm ci
+
+      - name: 前端类型检查
+        working-directory: client
+        run: npm run typecheck
+
+      - name: 前端构建
+        working-directory: client
+        run: npm run build
+
+  e2e:
+    name: 端到端测试
+    runs-on: ubuntu-latest
+    # 需要真实数据库：迁移、seed、并发下单这些用 mock 测不出来
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_pwd
+          MYSQL_DATABASE: smart_second_hand
+        ports:
+          - '3306:3306'
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_pwd --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:ci_root_pwd@127.0.0.1:3306/smart_second_hand
+      JWT_SECRET: ci-only-secret-please-change-in-production
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:5173
+      NODE_ENV: test
+      PORT: '3000'
+      # 关键：CI 不配置 DeepSeek Key，走本地规则解析。
+      # E2E 的 AI 用例接受 source ∈ {ai, mock, fallback}，因此离线也能全绿
+      AI_MOCK: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: 安装后端依赖
+        working-directory: server
+        run: npm ci
+
+      - name: 生成 Prisma Client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: 执行数据库迁移
+        working-directory: server
+        run: npx prisma migrate deploy
+
+      - name: 灌入演示数据
+        working-directory: server
+        run: npm run seed
+
+      - name: 构建并启动后端
+        working-directory: server
+        run: |
+          npm run build
+          nohup node dist/index.js > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+
+      - name: 等待后端就绪
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/health > /dev/null; then
+              echo "后端已就绪"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "后端启动超时，日志如下："
+          cat /tmp/server.log
+          exit 1
+
+      - name: 运行 E2E（81 条）
+        run: node scripts/e2e/run-all.js
+
+      - name: 失败时上传后端日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: /tmp/server.log
+          if-no-files-found: ignore
+
+      - name: 停止后端
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then kill "$(cat /tmp/server.pid)" || true; fi
