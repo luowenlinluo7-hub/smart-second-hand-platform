@@ -30,35 +30,43 @@ const CATEGORY_PHONE = 'seed-cat-phone';
 const CATEGORY_COMPUTER = 'seed-cat-computer';
 const CATEGORY_APPLIANCE = 'seed-cat-appliance';
 
-// 商品图片全部使用本地占位图（client/public/demo/pN.jpg）。
-// 不使用任何外部图床，保证断网 / 离线演示环境下图片也能正常显示。
-const DEMO_IMAGE_COUNT = 12;
+// 商品图片：25 张真实照片（来源 Unsplash，免费授权，已本地化到 client/public/demo/pN.jpg）。
+// 之所以坚持本地引用而不是外链：断网 / 离线答辩环境照样能显示，也不会被后端 CSP 拦截。
+// 文件按品类分块编号，保证「同一商品的图同品类、跨商品不串类」：
+//   p1–p12  手机数码（手机 / 平板 / 耳机 / 相机）
+//   p13–p21 电脑办公（笔记本 / 鼠标 / 键盘 / 显示器）
+//   p22–p25 家用电器（厨房 / 卫浴 / 洗衣机 / 小家电）
+const PHONE_IMAGES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const COMPUTER_IMAGES = [13, 14, 15, 16, 17, 18, 19, 20, 21];
+const APPLIANCE_IMAGES = [22, 23, 24, 25];
 
-// 每个商品从不同的占位图开始取，避免所有商品长得一样
-const IMAGE_START: Record<string, number> = {
-  iphone13: 0,
-  mi13: 1,
-  ipadair4: 2,
-  airpods: 3,
-  macbookm1: 4,
-  thinkpad: 5,
-  mxmaster3s: 6,
-  dysonv8: 7,
-  midea: 8,
-  joyoung: 9,
-  legion: 10,
-  tuf: 11,
-  g15: 4,
-  z3air: 7,
+const CATEGORY_IMAGE_POOL: Record<string, number[]> = {
+  [CATEGORY_PHONE]: PHONE_IMAGES,
+  [CATEGORY_COMPUTER]: COMPUTER_IMAGES,
+  [CATEGORY_APPLIANCE]: APPLIANCE_IMAGES,
 };
 
-const img = (slug: string, n: number): string[] => {
-  const start = IMAGE_START[slug] ?? 0;
-  return Array.from(
-    { length: n },
-    (_, i) => `/demo/p${((start + i) % DEMO_IMAGE_COUNT) + 1}.jpg`,
-  );
+// 每件在售商品显式指定用图，避免「电饭煲配笔记本照片」这类跨品类串图
+const PRODUCT_IMAGES: Record<string, number[]> = {
+  iphone13: [1, 2], // iPhone 背面 / 正面
+  mi13: [3, 4], // 红色手机 / 双机
+  ipadair4: [5, 6],
+  airpods: [7, 8],
+  macbookm1: [13, 18], // 两台都是 MacBook
+  thinkpad: [14, 15],
+  mxmaster3s: [19, 20], // 鼠标 / 键盘
+  legion: [16, 17], // 游戏本
+  tuf: [17, 16],
+  g15: [15, 14],
+  z3air: [14, 15],
+  dysonv8: [23, 24], // 卫浴 / 洗衣机（清洁场景）
+  midea: [22, 25], // 厨房 / 小家电
+  joyoung: [25, 22],
 };
+
+const demoImg = (n: number): string => `/demo/p${n}.jpg`;
+
+const img = (slug: string): string[] => (PRODUCT_IMAGES[slug] ?? PHONE_IMAGES).map(demoImg);
 
 const PRODUCTS: SeedProduct[] = [
   {
@@ -69,7 +77,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '5999.00',
     condition: 'LIKE_NEW',
     categoryId: CATEGORY_PHONE,
-    images: img('iphone13', 3),
+    images: img('iphone13'),
     viewCount: 328,
     favoriteCount: 42,
   },
@@ -81,7 +89,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '3999.00',
     condition: 'NEW',
     categoryId: CATEGORY_PHONE,
-    images: img('mi13', 2),
+    images: img('mi13'),
     viewCount: 215,
     favoriteCount: 30,
   },
@@ -93,7 +101,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '4799.00',
     condition: 'GOOD',
     categoryId: CATEGORY_PHONE,
-    images: img('ipadair4', 3),
+    images: img('ipadair4'),
     viewCount: 176,
     favoriteCount: 21,
   },
@@ -105,7 +113,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '1899.00',
     condition: 'LIKE_NEW',
     categoryId: CATEGORY_PHONE,
-    images: img('airpods', 2),
+    images: img('airpods'),
     viewCount: 402,
     favoriteCount: 55,
   },
@@ -117,7 +125,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '7999.00',
     condition: 'GOOD',
     categoryId: CATEGORY_COMPUTER,
-    images: img('macbookm1', 3),
+    images: img('macbookm1'),
     viewCount: 512,
     favoriteCount: 78,
   },
@@ -129,7 +137,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '12999.00',
     condition: 'FAIR',
     categoryId: CATEGORY_COMPUTER,
-    images: img('thinkpad', 2),
+    images: img('thinkpad'),
     viewCount: 143,
     favoriteCount: 12,
   },
@@ -141,7 +149,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '749.00',
     condition: 'LIKE_NEW',
     categoryId: CATEGORY_COMPUTER,
-    images: img('mxmaster3s', 2),
+    images: img('mxmaster3s'),
     viewCount: 268,
     favoriteCount: 34,
   },
@@ -153,7 +161,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '2999.00',
     condition: 'GOOD',
     categoryId: CATEGORY_APPLIANCE,
-    images: img('dysonv8', 3),
+    images: img('dysonv8'),
     viewCount: 189,
     favoriteCount: 19,
   },
@@ -165,7 +173,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '399.00',
     condition: 'GOOD',
     categoryId: CATEGORY_APPLIANCE,
-    images: img('midea', 2),
+    images: img('midea'),
     viewCount: 96,
     favoriteCount: 8,
   },
@@ -177,7 +185,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '899.00',
     condition: 'FAIR',
     categoryId: CATEGORY_APPLIANCE,
-    images: img('joyoung', 2),
+    images: img('joyoung'),
     viewCount: 74,
     favoriteCount: 5,
   },
@@ -191,7 +199,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '8299.00',
     condition: 'LIKE_NEW',
     categoryId: CATEGORY_COMPUTER,
-    images: img('legion', 3),
+    images: img('legion'),
     viewCount: 431,
     favoriteCount: 63,
   },
@@ -203,7 +211,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '7499.00',
     condition: 'LIKE_NEW',
     categoryId: CATEGORY_COMPUTER,
-    images: img('tuf', 2),
+    images: img('tuf'),
     viewCount: 356,
     favoriteCount: 48,
   },
@@ -215,7 +223,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '8999.00',
     condition: 'GOOD',
     categoryId: CATEGORY_COMPUTER,
-    images: img('g15', 3),
+    images: img('g15'),
     viewCount: 208,
     favoriteCount: 27,
   },
@@ -227,7 +235,7 @@ const PRODUCTS: SeedProduct[] = [
     originalPrice: '5699.00',
     condition: 'GOOD',
     categoryId: CATEGORY_COMPUTER,
-    images: img('z3air', 2),
+    images: img('z3air'),
     viewCount: 167,
     favoriteCount: 18,
   },
@@ -308,12 +316,29 @@ const HISTORY_PRODUCTS: SeedHistoryProduct[] = [
   { id: 'seed-hist-50', title: `${HISTORY_PREFIX} MacBook Pro 14 M1 Pro`, description: '已成交，循环充电 156 次，原装充电器。', price: '4999.00', originalPrice: '15999.00', condition: 'LIKE_NEW', categoryId: CATEGORY_COMPUTER },
 ];
 
-// 历史商品图片：按索引轮转占位图，避免所有商品长得一样
-const histImg = (index: number): string[] =>
-  Array.from(
-    { length: 2 },
-    (_, i) => `/demo/p${((index * 2 + i) % DEMO_IMAGE_COUNT) + 1}.jpg`,
-  );
+// 历史商品是手工编的标题，用关键词把它们指到最贴近的真实照片上，
+// 避免「头戴耳机配手机图」这类明显穿帮；匹配不到再退回分类图池。
+const HISTORY_IMAGE_HINTS: readonly { test: RegExp; images: number[] }[] = [
+  { test: /耳机|AirPods/i, images: [9, 7] },
+  { test: /相机|微单/, images: [11, 12] },
+  { test: /平板|iPad/i, images: [5, 6] },
+  { test: /键盘/, images: [20, 19] },
+  { test: /鼠标/, images: [19, 20] },
+  { test: /显示器|支架/, images: [21, 20] },
+  { test: /洗衣机/, images: [24, 23] },
+  { test: /吸尘器|扫地/, images: [23, 24] },
+  { test: /空调|净化器|电饭煲|压力锅|电磁炉|热水壶|台灯|榨汁机|空气炸锅/, images: [22, 25] },
+  { test: /MacBook|笔记本|ThinkPad|游戏本|小新|拯救者|游匣|天选|机械革命/i, images: [13, 14] },
+  { test: /手机|iPhone|Mate|手环|手表|WiFi|音箱|壳/i, images: [1, 3] },
+];
+
+// 历史商品图片：先按标题关键词命中，再按分类图池轮转
+const histImg = (title: string, index: number, categoryId: string): string[] => {
+  const hit = HISTORY_IMAGE_HINTS.find((hint) => hint.test.test(title));
+  if (hit) return hit.images.map(demoImg);
+  const pool = CATEGORY_IMAGE_POOL[categoryId] ?? PHONE_IMAGES;
+  return [0, 1].map((k) => demoImg(pool[(index * 2 + k) % pool.length]));
+};
 
 // ============================================================
 // 历史订单：覆盖全部 6 种状态，时间分布在过去 30 天内
@@ -428,7 +453,15 @@ const buildHistoryOrders = (): SeedHistoryOrder[] => {
               rating: 3 + ((index + daysAgo) % 3),
               reviewContent: REVIEW_TEXTS[index % REVIEW_TEXTS.length],
               reviewImages:
-                index % 3 === 0 ? [`/demo/p${(index % DEMO_IMAGE_COUNT) + 1}.jpg`] : [],
+                index % 3 === 0
+                  ? [
+                      histImg(
+                        HISTORY_PRODUCTS[productNo - 1]?.title ?? '',
+                        index,
+                        HISTORY_PRODUCTS[productNo - 1]?.categoryId ?? CATEGORY_PHONE,
+                      )[0],
+                    ]
+                  : [],
             }
           : {}),
       });
@@ -602,7 +635,7 @@ async function main(): Promise<void> {
   const historyProducts = new Map<string, { title: string; price: string; image: string }>();
 
   for (const [index, p] of HISTORY_PRODUCTS.entries()) {
-    const images = histImg(index);
+    const images = histImg(p.title, index, p.categoryId);
     const data = {
       title: p.title,
       description: p.description,
@@ -756,7 +789,8 @@ async function main(): Promise<void> {
           revieweeId: seller.id,
           rating,
           content: REVIEW_TEXTS[(plan.productIndex + i) % REVIEW_TEXTS.length],
-          images: i === 0 ? [`/demo/p${(plan.productIndex % DEMO_IMAGE_COUNT) + 1}.jpg`] : [],
+          // 晒图直接用该商品自己的主图，视觉上才说得通
+          images: i === 0 && product.images[0] ? [product.images[0]] : [],
           status: 'VISIBLE',
           createdAt,
         },
