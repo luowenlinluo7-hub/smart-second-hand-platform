@@ -30,6 +30,10 @@ const envSchema = z.object({
     .string()
     .default('false')
     .transform((value) => value === 'true' || value === '1'),
+  // 登录 / 注册的失败尝试上限（15 分钟窗口内），只统计失败的尝试。
+  // E2E 等场景需要连续制造失败时，可临时调大该值。
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);

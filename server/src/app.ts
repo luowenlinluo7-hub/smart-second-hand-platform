@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
+import helmet from 'helmet';
 import fs from 'node:fs';
 import path from 'node:path';
 import { corsOrigins, env } from './config/env';
@@ -19,6 +20,34 @@ export const createApp = (): Express => {
   const app = express();
 
   app.disable('x-powered-by');
+
+  // 安全响应头。指令按本项目的实际资源定制，不能直接用 helmet 默认值：
+  // 1) style-src 需要 'unsafe-inline'：Element Plus 大量使用内联 style 属性
+  // 2) img-src 需要 data: / blob:：头像占位与 ECharts 导出会用到
+  // 3) font-src 需要 data:：@fontsource 打包的字体走同源，兜底 data:
+  // 4) 关掉 upgrade-insecure-requests：本项目答辩演示包是用 http://<局域网IP>:3000
+  //    跑的，UIR 会把资源请求升级成 https 导致整页白屏。生产请在 Nginx 层做 HTTPS 跳转。
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'font-src': ["'self'", 'data:'],
+          'connect-src': ["'self'"],
+          'object-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+          'upgrade-insecure-requests': null,
+        },
+      },
+      // 与前端同源托管，资源策略保持 same-origin 即可
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+    }),
+  );
+
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
