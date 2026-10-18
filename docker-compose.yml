@@ -1,0 +1,42 @@
+# ------------------------------------------------------------
+# 只做「数据库」：应用本身仍用 npm 在本地跑（前后端分离开发更顺手）。
+# 启动：  docker compose up -d
+# 停止：  docker compose down          # 保留数据
+# 清库：  docker compose down -v       # 连数据卷一起删
+#
+# 本机 3306 已被占用时（比如自己装过 MySQL）：
+#   MYSQL_PORT=3307 docker compose up -d
+#   同时把 server/.env 里的 DATABASE_URL 端口改成 3307
+# ------------------------------------------------------------
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: smart-second-hand-mysql
+    restart: unless-stopped
+    command:
+      # 中文商品标题、描述必须 utf8mb4，否则 emoji 与部分汉字会报 1366
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      # 仅本地开发用的默认口令，可通过环境变量或 .env 覆盖
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-secondhand_dev_pwd}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_second_hand}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # 只有 ping 通过才算就绪，避免「容器起了但还没接受连接」时跑迁移失败
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  mysql-data:
