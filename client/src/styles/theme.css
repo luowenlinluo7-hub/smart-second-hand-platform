@@ -44,6 +44,23 @@
   /* 页面主区域左右内边距 */
   --main-padding: var(--space-2);
 
+  /* ---------- 首页 Hero ---------- */
+  /* 纯白底：Hero 本身是暖白，输入框用纯白浮起才有层次
+     （页面背景仍遵守「不用纯白」的规范，这里只用于前景卡片） */
+  --brand-surface-raised: #ffffff;
+  --hero-radius: 16px;
+  --hero-title-size: 40px;
+  --hero-input-h: 56px;
+  /* 两级柔光斑：强光在右上、弱光在左下，形成斜向呼吸感 */
+  --hero-glow-strong: rgba(255, 107, 53, 0.18);
+  --hero-glow-soft: rgba(255, 107, 53, 0.1);
+  /* 输入框弥散暖橙阴影：让它从 Hero 背景里「浮起来」 */
+  --shadow-hero-input: 0 8px 30px rgba(255, 107, 53, 0.15);
+  /* 聚焦态：加深投影 + 一圈淡橙外发光 */
+  --shadow-hero-input-focus:
+    0 8px 30px rgba(255, 107, 53, 0.22),
+    0 0 0 4px rgba(255, 107, 53, 0.14);
+
   /* ---------- 字体 ---------- */
   /* 标题用衬线增强品牌感，正文用非衬线保证可读性。
      fallback 刻意避开 Inter / Roboto / Arial（规范禁止）。 */
@@ -179,6 +196,11 @@ h3,
     --carousel-h: 240px;
     --card-cover-h: 120px;
     --main-padding: var(--space-1);
+    /* Hero：标题缩到 24px（12 个汉字约 288px，390px 视口仍单行），
+       输入框与圆角同步收小，避免在窄屏显得笨重 */
+    --hero-title-size: 24px;
+    --hero-input-h: 48px;
+    --hero-radius: 12px;
   }
 
   /* 小屏下表格/长内容允许在自身容器内横向滚动，
