@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { CarouselInstance } from 'element-plus'
+import { ChatDotRound } from '@element-plus/icons-vue'
 import { getProduct, getProductReviews } from '@/api/product'
 import { getUserProfile } from '@/api/user'
+import EmptyState from '@/components/EmptyState.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useAiChatStore } from '@/stores/aiChat'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { CONDITION_LABEL } from '@/constants/status'
+import { formatDate } from '@/utils/format'
 import type { Product, ProductReview, ReviewSummary, SellerProfile } from '@/types/api'
 
 const route = useRoute()
@@ -21,6 +25,18 @@ const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const product = ref<Product | null>(null)
+
+// 图库：主图轮播 + 缩略图条
+const carouselRef = ref<CarouselInstance>()
+const activeSlide = ref(0)
+// 商品图可能是空数组，统一成数组便于模板里判空
+const images = computed<string[]>(() => product.value?.images ?? [])
+const onSlideChange = (index: number): void => {
+  activeSlide.value = index
+}
+const goSlide = (index: number): void => {
+  carouselRef.value?.setActiveItem(index)
+}
 
 // 卖家信息卡：seller 负责统计数字，头像/昵称先用商品自带的兜底
 const seller = ref<SellerProfile | null>(null)
@@ -43,12 +59,6 @@ const sellerName = computed<string>(() => {
 const sellerAvatar = computed<string | null>(
   () => seller.value?.avatar ?? product.value?.seller.avatar ?? null,
 )
-
-const formatDate = (iso: string): string => {
-  const d = new Date(iso)
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 
 // 某星级占比（0~100），用于分布条
 const starPercent = (star: number): number => {
@@ -149,6 +159,10 @@ const loadProduct = async (id: string): Promise<void> => {
   aiChat.setFocusProduct(id)
   try {
     product.value = await getProduct(id)
+    // 关闭自动轮播后，仍主动归零一次：EP 在「item 异步插入」时可能停在非首帧
+    await nextTick()
+    carouselRef.value?.setActiveItem(0)
+    activeSlide.value = 0
 
     // 卖家统计与评价并行拉取：任一失败都不应影响商品主体展示
     void getUserProfile(product.value.sellerId)
@@ -176,6 +190,8 @@ watch(
   () => route.params.id,
   (id) => {
     if (typeof id === 'string' && id) {
+      // 换商品时图库回到第一张，否则会停在上一个商品的第 N 张
+      activeSlide.value = 0
       void loadProduct(id)
     }
   },
@@ -192,18 +208,38 @@ onUnmounted(() => {
     <template v-if="product">
       <el-card shadow="never" class="detail-card">
         <el-row :gutter="24">
-          <!-- 左侧轮播图 -->
+          <!-- 左侧图库：主图 + 缩略图条 -->
           <el-col :xs="24" :md="10">
-            <el-carousel
-              v-if="product.images && product.images.length"
-              height="var(--carousel-h)"
-              indicator-position="outside"
-            >
-              <el-carousel-item v-for="(img, i) in product.images" :key="i">
-                <img :src="img" class="carousel-img" alt="商品图" />
-              </el-carousel-item>
-            </el-carousel>
-            <div v-else class="no-image">暂无图片</div>
+            <div class="gallery">
+              <el-carousel
+                v-if="images.length"
+                ref="carouselRef"
+                height="var(--carousel-h)"
+                indicator-position="none"
+                :autoplay="false"
+                @change="onSlideChange"
+              >
+                <el-carousel-item v-for="(img, i) in images" :key="i">
+                  <img :src="img" class="carousel-img" alt="商品图" />
+                </el-carousel-item>
+              </el-carousel>
+              <div v-else class="no-image">暂无图片</div>
+
+              <!-- 缩略图只在多图时出现；单图无需让用户点第二次 -->
+              <div v-if="images.length > 1" class="thumb-strip">
+                <button
+                  v-for="(img, i) in images"
+                  :key="i"
+                  type="button"
+                  class="thumb-btn"
+                  :class="{ 'is-active': i === activeSlide }"
+                  :aria-label="`查看第 ${i + 1} 张图片`"
+                  @click="goSlide(i)"
+                >
+                  <img :src="img" alt="" />
+                </button>
+              </div>
+            </div>
           </el-col>
 
           <!-- 右侧信息 -->
@@ -224,7 +260,7 @@ onUnmounted(() => {
                 {{ product.seller.nickname || product.seller.username }}
               </el-descriptions-item>
               <el-descriptions-item label="发布时间">
-                {{ product.publishedAt ? product.publishedAt.slice(0, 10) : '-' }}
+                {{ product.publishedAt ? formatDate(product.publishedAt) : '-' }}
               </el-descriptions-item>
             </el-descriptions>
 
@@ -289,7 +325,13 @@ onUnmounted(() => {
         </template>
 
         <div v-loading="reviewLoading" class="review-wrap">
-          <el-empty v-if="!reviewLoading && reviewTotal === 0" description="该商品还没有评价" />
+          <EmptyState
+            v-if="!reviewLoading && reviewTotal === 0"
+            :icon="ChatDotRound"
+            title="该商品还没有评价"
+            description="买家完成交易后即可在这里留下评价"
+            compact
+          />
 
           <template v-else>
             <!-- 评分概览：平均分 + 星级分布 -->
@@ -578,10 +620,17 @@ onUnmounted(() => {
   padding-top: var(--space-2);
 }
 
+.gallery {
+  width: 100%;
+}
+
+/* 主图圆角与卡片保持一致（12px），并加一层极淡的投影让图片「放进」卡片里 */
 .carousel-img {
   width: 100%;
   height: var(--carousel-h);
   object-fit: cover;
+  border-radius: var(--el-card-border-radius);
+  box-shadow: var(--el-box-shadow-lighter);
 }
 
 .no-image {
@@ -591,38 +640,91 @@ onUnmounted(() => {
   justify-content: center;
   background: var(--el-fill-color-light);
   color: var(--el-text-color-placeholder);
+  border-radius: var(--el-card-border-radius);
+}
+
+/* 缩略图条：56px 方块，选中项用主色描边 */
+.thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.thumb-btn {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: var(--el-border-radius-base);
+  background-color: var(--el-fill-color-light);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb-btn:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.thumb-btn.is-active {
+  border-color: var(--el-color-primary);
+}
+
+.thumb-btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .title {
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-title);
   font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--el-text-color-primary);
 }
 
 .price-row {
-  margin-bottom: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
 }
 
 .price {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-size: 28px;
   font-weight: 700;
 }
 
 .original {
-  margin-left: 12px;
   color: var(--el-text-color-placeholder);
+  font-size: 13px;
   text-decoration: line-through;
 }
 
 .info {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-1);
 }
 
 .description {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.85;
   color: var(--el-text-color-regular);
-  line-height: 1.8;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .actions {
@@ -645,6 +747,12 @@ onUnmounted(() => {
 
   .price {
     font-size: 22px;
+  }
+
+  /* 缩略图在窄屏缩小，5 张也不会换行 */
+  .thumb-btn {
+    width: 48px;
+    height: 48px;
   }
 
   /* 操作按钮纵向铺满，避免 4 个按钮挤成一行被截断 */

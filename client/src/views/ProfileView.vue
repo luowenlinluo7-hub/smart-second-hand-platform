@@ -229,7 +229,7 @@ const handleLogout = (): void => {
             :model="pwdForm"
             :rules="pwdRules"
             :label-position="isMobile ? 'top' : 'right'"
-            :label-width="isMobile ? 'auto' : '90px'"
+            :label-width="isMobile ? 'auto' : '96px'"
           >
             <el-form-item label="原密码" prop="oldPassword">
               <el-input v-model="pwdForm.oldPassword" type="password" show-password />
@@ -241,7 +241,7 @@ const handleLogout = (): void => {
               <el-input v-model="pwdForm.confirmPassword" type="password" show-password />
             </el-form-item>
             <el-form-item>
-              <el-button type="danger" :loading="savingPwd" @click="savePassword">修改密码</el-button>
+              <el-button type="primary" :loading="savingPwd" @click="savePassword">修改密码</el-button>
             </el-form-item>
           </el-form>
 
@@ -274,18 +274,22 @@ const handleLogout = (): void => {
 .avatar-box {
   width: 88px;
   height: 88px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
+  border: 1px dashed var(--upload-border);
+  border-radius: var(--upload-radius);
+  background-color: var(--el-fill-color-blank);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.2s;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .avatar-box:hover {
   border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
 }
 
 .avatar-img {
@@ -299,8 +303,13 @@ const handleLogout = (): void => {
   color: var(--el-text-color-secondary);
 }
 
+.avatar-box:hover .avatar-plus {
+  color: var(--el-color-primary);
+}
+
 .avatar-tip {
   font-size: 12px;
+  line-height: 1.6;
   color: var(--el-text-color-secondary);
 }
 </style>

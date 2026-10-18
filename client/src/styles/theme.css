@@ -22,6 +22,9 @@
   /* 承载白字的实心色：白字压在 #ff6b35 上只有 2.84:1（不达 WCAG AA），
      同色相加深到 #d1461d 后为 4.56:1。主色本身不变，只用于「有文字的实心块」。 */
   --brand-primary-strong: #d1461d;
+  /* 价格数字：电商场景需要比正文更抢眼，但仍属暖色体系。
+     EP 默认的 --el-color-danger(#f56c6c) 偏冷粉，与暖橙主色冲突，故单独定义。 */
+  --price-color: #d1461d;
 
   /* ---------- 间距（8 的倍数，只约束自定义布局） ---------- */
   --space-1: 8px;
@@ -60,6 +63,10 @@
   --shadow-hero-input-focus:
     0 8px 30px rgba(255, 107, 53, 0.22),
     0 0 0 4px rgba(255, 107, 53, 0.14);
+
+  /* ---------- 上传区（头像框 / 商品图 picture-card 共用） ---------- */
+  --upload-radius: 12px;
+  --upload-border: var(--el-border-color);
 
   /* ---------- 字体 ---------- */
   /* 标题用衬线增强品牌感，正文用非衬线保证可读性。
@@ -139,6 +146,12 @@
   --el-button-disabled-bg-color: #ffd3c2;
   --el-button-disabled-border-color: #ffd3c2;
   --el-button-disabled-text-color: #8a3a18;
+}
+
+/* 表单行距：EP 默认 18px 不是 8 的倍数，且上下两行太挤。
+   统一到 24px，所有表单页（登录 / 注册 / 发布 / 个人中心 / 购物车结算）一次性对齐。 */
+.el-form-item {
+  margin-bottom: var(--space-3);
 }
 
 /* 页面底色与正文字体。

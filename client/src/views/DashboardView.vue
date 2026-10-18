@@ -5,7 +5,9 @@ import { ElMessage } from 'element-plus'
 import { Goods, List, Money, User } from '@element-plus/icons-vue'
 import type { EChartsOption } from 'echarts'
 import EChart from '@/components/EChart.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { getDashboard } from '@/api/admin'
+import { DataLine } from '@element-plus/icons-vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { DashboardData } from '@/types/api'
 
@@ -312,7 +314,7 @@ onMounted(fetchData)
     <template v-else>
       <el-card v-loading="loading" shadow="never" class="chart-card">
         <template #header><span class="chart-title">成交额与订单量趋势</span></template>
-        <el-empty v-if="isEmptyTrend" description="该时间段暂无订单" :image-size="80" />
+        <EmptyState v-if="isEmptyTrend" :icon="DataLine" title="该时间段暂无订单" compact />
         <EChart v-else :option="trendOption" height="var(--chart-h-lg)" />
       </el-card>
 
@@ -320,14 +322,14 @@ onMounted(fetchData)
         <el-col :xs="24" :md="12">
           <el-card v-loading="loading" shadow="never" class="chart-card">
             <template #header><span class="chart-title">订单状态分布</span></template>
-            <el-empty v-if="isEmptyStatus" description="暂无订单" :image-size="80" />
+            <EmptyState v-if="isEmptyStatus" :icon="DataLine" title="暂无订单" compact />
             <EChart v-else :option="statusOption" height="var(--chart-h-md)" />
           </el-card>
         </el-col>
         <el-col :xs="24" :md="12">
           <el-card v-loading="loading" shadow="never" class="chart-card">
             <template #header><span class="chart-title">商品分类占比</span></template>
-            <el-empty v-if="isEmptyCategory" description="暂无商品" :image-size="80" />
+            <EmptyState v-if="isEmptyCategory" :icon="DataLine" title="暂无商品" compact />
             <EChart v-else :option="categoryOption" height="var(--chart-h-md)" />
           </el-card>
         </el-col>
@@ -335,7 +337,7 @@ onMounted(fetchData)
 
       <el-card v-loading="loading" shadow="never" class="chart-card">
         <template #header><span class="chart-title">高价值商品 Top 5（按成交额）</span></template>
-        <el-empty v-if="isEmptyTop" description="暂无成交记录" :image-size="80" />
+        <EmptyState v-if="isEmptyTop" :icon="DataLine" title="暂无成交记录" compact />
         <EChart v-else :option="topOption" height="var(--chart-h-md)" />
       </el-card>
     </template>

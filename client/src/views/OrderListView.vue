@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBuyerOrders, getSellerOrders, updateOrderStatus } from '@/api/order'
 import { ORDER_STATUS_LABEL, ORDER_STATUS_OPTIONS, ORDER_STATUS_TAG_TYPE } from '@/constants/status'
+import EmptyState from '@/components/EmptyState.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Order, OrderStatus } from '@/types/api'
+import { Tickets } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -73,10 +75,18 @@ const goDetail = (id: string): void => {
 }
 
 // 当前用户对该订单可执行的操作（与后端状态机保持一致）
-const actionsOf = (order: Order): { label: string; type: 'primary' | 'success' | 'info' | 'danger'; run: () => void }[] => {
+// plain=true 用于破坏性操作：浅底描边，避免和主操作抢视线
+const actionsOf = (
+  order: Order,
+): { label: string; type: 'primary' | 'success' | 'info' | 'danger'; plain?: boolean; run: () => void }[] => {
   const isBuyer = order.buyerId === authStore.user?.id
   const isSeller = order.sellerId === authStore.user?.id
-  const actions: { label: string; type: 'primary' | 'success' | 'info' | 'danger'; run: () => void }[] = []
+  const actions: {
+    label: string
+    type: 'primary' | 'success' | 'info' | 'danger'
+    plain?: boolean
+    run: () => void
+  }[] = []
 
   if (isBuyer && order.status === 'PENDING_PAYMENT') {
     actions.push({
@@ -87,6 +97,7 @@ const actionsOf = (order: Order): { label: string; type: 'primary' | 'success' |
     actions.push({
       label: '取消订单',
       type: 'danger',
+      plain: true,
       run: () => doTransition(order, 'CANCELLED', '确认取消该订单？取消后商品会重新上架'),
     })
   }
@@ -151,7 +162,14 @@ onMounted(() => {
       </div>
 
       <div v-loading="loading">
-        <el-empty v-if="!loading && list.length === 0" description="暂无订单" />
+        <EmptyState
+          v-if="!loading && list.length === 0"
+          :icon="Tickets"
+          title="还没有订单"
+          description="挑一件心仪的好物，开启你的第一笔交易"
+          action-text="去逛逛"
+          @action="router.push('/')"
+        />
 
         <div v-for="order in list" :key="order.id" class="order-item">
           <div class="order-head">
@@ -189,6 +207,7 @@ onMounted(() => {
                 :key="action.label"
                 size="small"
                 :type="action.type"
+                :plain="action.plain"
                 @click="action.run()"
               >
                 {{ action.label }}
@@ -198,7 +217,8 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="pagination">
+      <!-- 空列表时分页没有意义，直接隐藏 -->
+      <div v-if="total > 0" class="pagination">
         <el-pagination
           :current-page="page"
           :page-size="pageSize"
@@ -229,9 +249,18 @@ onMounted(() => {
 
 .order-item {
   border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 12px;
+  border-radius: var(--el-card-border-radius);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+/* 整卡可点，hover 给到与其它卡片一致的浮起反馈 */
+.order-item:hover {
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: var(--el-box-shadow-light);
 }
 
 .order-head {
@@ -258,21 +287,21 @@ onMounted(() => {
 }
 
 .order-body {
-  padding: 8px 0;
+  padding: var(--space-1) 0;
   cursor: pointer;
 }
 
 .order-goods {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-1);
   padding: 6px 0;
 }
 
 .thumb {
   width: 48px;
   height: 48px;
-  border-radius: 4px;
+  border-radius: var(--el-border-radius-base);
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -284,6 +313,9 @@ onMounted(() => {
 .goods-title {
   font-size: 14px;
   color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .goods-price {
@@ -296,12 +328,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 8px;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .amount {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-size: 18px;
   font-weight: 700;
 }

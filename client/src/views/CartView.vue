@@ -2,8 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ShoppingCart, WarningFilled } from '@element-plus/icons-vue'
 import { createOrder } from '@/api/order'
 import { getProduct } from '@/api/product'
+import EmptyState from '@/components/EmptyState.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useCartStore, type CartItem } from '@/stores/cart'
 
@@ -174,16 +176,23 @@ const onSubmit = async (): Promise<void> => {
       </template>
 
       <!-- 立即购买模式下商品不可购买（已售出 / 已下架 / 加载失败） -->
-      <el-empty
+      <EmptyState
         v-if="buyNowId && !buyNowLoading && !buyNowItem"
-        description="该商品暂时无法购买"
-      >
-        <el-button type="primary" @click="router.back()">返回商品页</el-button>
-      </el-empty>
+        :icon="WarningFilled"
+        title="该商品暂时无法购买"
+        description="可能已被他人买走或卖家下架，看看其它同类商品？"
+        action-text="返回商品页"
+        @action="router.back()"
+      />
 
-      <el-empty v-else-if="!buyNowId && cartStore.items.length === 0" description="购物车是空的，去逛逛吧">
-        <el-button type="primary" @click="router.push('/')">去挑选商品</el-button>
-      </el-empty>
+      <EmptyState
+        v-else-if="!buyNowId && cartStore.items.length === 0"
+        :icon="ShoppingCart"
+        title="购物车是空的"
+        description="挑几件心仪的好物放进来，一次性结算更省事"
+        action-text="去挑选商品"
+        @action="router.push('/')"
+      />
 
       <template v-else>
         <!-- 按卖家分组展示（下单后端会按卖家拆单） -->
@@ -317,7 +326,7 @@ const onSubmit = async (): Promise<void> => {
 .subtotal {
   width: 100px;
   text-align: right;
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-weight: 600;
 }
 
@@ -332,7 +341,7 @@ const onSubmit = async (): Promise<void> => {
 }
 
 .total-amount {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-size: 20px;
   font-weight: 700;
 }

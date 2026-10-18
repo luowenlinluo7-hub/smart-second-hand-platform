@@ -3,10 +3,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createReviews, getOrder, updateOrderStatus } from '@/api/order'
-import { ORDER_STATUS_LABEL } from '@/constants/status'
+import { ORDER_STATUS_LABEL, ORDER_STATUS_TAG_TYPE } from '@/constants/status'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateTime } from '@/utils/format'
 import type { Order, OrderStatus } from '@/types/api'
 
 const route = useRoute()
@@ -35,6 +36,31 @@ const activeStep = computed(() => {
   const idx = statusSteps.findIndex((s) => s.key === order.value?.status)
   return idx < 0 ? 0 : idx
 })
+
+// 每个流转节点的真实时间。时间戳来自后端已有的 paidAt / shippedAt / completedAt / reviewedAt，
+// 没有的就是还没走到这一步，用灰色「待完成」占位，让时间线的「进度感」可读。
+// 日期与时间拆成两行：5 个节点并排时单行会顶到容器边缘被裁掉。
+const stepDesc = (key: OrderStatus): string => {
+  const o = order.value
+  if (!o) return ''
+  const raw = ((): string => {
+    switch (key) {
+      case 'PENDING_PAYMENT':
+        return formatDateTime(o.createdAt)
+      case 'PENDING_SHIPMENT':
+        return formatDateTime(o.paidAt)
+      case 'SHIPPED':
+        return formatDateTime(o.shippedAt)
+      case 'COMPLETED':
+        return formatDateTime(o.completedAt)
+      case 'REVIEWED':
+        return formatDateTime(o.reviewedAt)
+      default:
+        return ''
+    }
+  })()
+  return raw ? raw.replace(' ', '\n') : '待完成'
+}
 
 const isBuyer = computed(() => order.value?.buyerId === authStore.user?.id)
 const isSeller = computed(() => order.value?.sellerId === authStore.user?.id)
@@ -99,8 +125,9 @@ onMounted(fetchOrder)
       <el-card shadow="never" class="mb">
         <template #header>
           <div class="head">
-            <span>订单号：{{ order.orderNo }}</span>
-            <el-tag :type="order.status === 'CANCELLED' ? 'info' : 'success'">
+            <span class="head-title">订单号：{{ order.orderNo }}</span>
+            <!-- 标签语义与「我的订单」列表同源，避免同一状态两处颜色不一致 -->
+            <el-tag :type="ORDER_STATUS_TAG_TYPE[order.status]" effect="light">
               {{ ORDER_STATUS_LABEL[order.status] }}
             </el-tag>
           </div>
@@ -113,7 +140,12 @@ onMounted(fetchOrder)
           :align-center="!isMobile"
           finish-status="success"
         >
-          <el-step v-for="s in statusSteps" :key="s.key" :title="s.label" />
+          <el-step
+            v-for="s in statusSteps"
+            :key="s.key"
+            :title="s.label"
+            :description="stepDesc(s.key)"
+          />
         </el-steps>
         <el-alert v-else type="info" :closable="false" title="该订单已取消，商品已重新上架" />
 
@@ -134,7 +166,7 @@ onMounted(fetchOrder)
             />
             卖家：{{ order.seller.nickname || order.seller.username }}
           </span>
-          <span>下单时间：{{ order.createdAt.slice(0, 19).replace('T', ' ') }}</span>
+          <span>下单时间：{{ formatDateTime(order.createdAt) }}</span>
         </div>
       </el-card>
 
@@ -158,7 +190,7 @@ onMounted(fetchOrder)
       <!-- 收货信息 -->
       <el-card shadow="never" class="mb">
         <template #header><span>收货信息</span></template>
-        <el-descriptions :column="1" border>
+        <el-descriptions :column="1" label-width="96px" border>
           <el-descriptions-item label="收货人">{{ order.receiverName }}</el-descriptions-item>
           <el-descriptions-item label="手机号">{{ order.receiverPhone }}</el-descriptions-item>
           <el-descriptions-item label="收货地址">{{ order.receiverAddress }}</el-descriptions-item>
@@ -191,6 +223,7 @@ onMounted(fetchOrder)
         <template v-if="isBuyer && order.status === 'PENDING_PAYMENT'">
           <el-button
             type="danger"
+            plain
             @click="doTransition('CANCELLED', '确认取消该订单？取消后商品会重新上架')"
           >
             取消订单
@@ -230,24 +263,42 @@ onMounted(fetchOrder)
 }
 
 .mb {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2);
 }
 
 .head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-1);
+}
+
+/* 步骤条时间拆成「日期 / 时间」两行，必须保留换行符 */
+:deep(.el-step__description) {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+.head-title {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {
   display: flex;
-  gap: 24px;
-  margin-top: 16px;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
   font-size: 13px;
   color: var(--el-text-color-secondary);
   flex-wrap: wrap;
 }
-.party {
+
+.party {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -256,15 +307,19 @@ onMounted(fetchOrder)
 .goods {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.goods:last-of-type {
+  border-bottom: none;
 }
 
 .thumb {
   width: 56px;
   height: 56px;
-  border-radius: 4px;
+  border-radius: var(--el-border-radius-base);
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -281,6 +336,9 @@ onMounted(fetchOrder)
 .goods-title {
   font-size: 14px;
   color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .goods-sub {
@@ -290,18 +348,19 @@ onMounted(fetchOrder)
 }
 
 .goods-subtotal {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-weight: 600;
+  flex: 0 0 auto;
 }
 
 .total-row {
   text-align: right;
-  margin-top: 12px;
+  margin-top: var(--space-2);
   color: var(--el-text-color-regular);
 }
 
 .amount {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-size: 20px;
   font-weight: 700;
 }
@@ -319,6 +378,34 @@ onMounted(fetchOrder)
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* EP 默认给相邻按钮加 12px 左边距，纵向排列时会顶出容器 */
+.actions .el-button {
+  margin-left: 0;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 767px) {
+  /* 5 个按钮在窄屏一行放不下，改为纵向铺满 */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions .el-button {
+    width: 100%;
+  }
+
+  .head-title {
+    font-size: 14px;
+  }
+
+  .total-row {
+    text-align: left;
+  }
 }
 </style>

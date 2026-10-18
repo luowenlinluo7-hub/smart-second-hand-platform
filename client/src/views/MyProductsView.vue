@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteProduct, getMyProducts, relistProduct } from '@/api/product'
+import { Goods } from '@element-plus/icons-vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { PRODUCT_STATUS_LABEL, PRODUCT_STATUS_TABS, PRODUCT_STATUS_TAG_TYPE } from '@/constants/status'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { Product, ProductStatus } from '@/types/api'
@@ -111,7 +113,14 @@ onMounted(fetchList)
       </el-tabs>
 
       <div v-loading="loading">
-        <el-empty v-if="!loading && list.length === 0" description="暂无商品" />
+        <EmptyState
+          v-if="!loading && list.length === 0"
+          :icon="Goods"
+          title="这里还没有商品"
+          description="发布一件闲置好物，让 AI 帮你找到合适的买家"
+          action-text="去发布"
+          @action="router.push('/publish')"
+        />
 
         <el-table v-else :data="list" style="width: 100%">
           <el-table-column label="商品" min-width="260">
@@ -168,7 +177,8 @@ onMounted(fetchList)
         </el-table>
       </div>
 
-      <div class="pagination">
+      <!-- 空列表时分页没有意义，直接隐藏 -->
+      <div v-if="total > 0" class="pagination">
         <el-pagination
           :current-page="page"
           :page-size="pageSize"

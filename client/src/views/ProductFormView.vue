@@ -196,6 +196,7 @@ onMounted(async () => {
         <el-form-item label="商品图片">
           <el-upload
             v-model:file-list="fileList"
+            class="uploader"
             action="/api/upload"
             name="files"
             list-type="picture-card"
@@ -240,8 +241,30 @@ onMounted(async () => {
 
 .upload-tip {
   font-size: 12px;
-  color: var(--el-text-color-placeholder);
-  margin-top: 6px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+  margin-top: var(--space-1);
+}
+
+/* 上传区与头像框共用同一套视觉：12px 圆角 + 虚线边框 + hover 变主色淡橙底 */
+.uploader :deep(.el-upload--picture-card) {
+  border: 1px dashed var(--upload-border);
+  border-radius: var(--upload-radius);
+  background-color: var(--el-fill-color-blank);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.uploader :deep(.el-upload--picture-card:hover) {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.uploader :deep(.el-upload-list--picture-card .el-upload-list__item) {
+  border-radius: var(--upload-radius);
+  overflow: hidden;
 }
 
 /* ---------- 移动端 ---------- */

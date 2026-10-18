@@ -5,6 +5,8 @@ import { ElMessage } from 'element-plus'
 import { getProducts } from '@/api/product'
 import { getCategories } from '@/api/category'
 import { searchByAi } from '@/api/ai'
+import { Search } from '@element-plus/icons-vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { CONDITION_LABEL } from '@/constants/status'
 import type { AiSearchResult, Category, Product, ProductCondition } from '@/types/api'
@@ -359,7 +361,14 @@ onMounted(async () => {
 
     <!-- 商品网格：ref 作为「浏览全部商品」与 AI 搜索后的滚动锚点 -->
     <div ref="gridRef" v-loading="loading" class="grid-wrap">
-      <el-empty v-if="!loading && products.length === 0" description="暂无商品" />
+      <EmptyState
+        v-if="!loading && products.length === 0"
+        :icon="Search"
+        title="没有找到匹配的商品"
+        description="换个关键词，或清除当前筛选条件再试试"
+        action-text="清除筛选条件"
+        @action="onReset"
+      />
 
       <el-row v-else :gutter="16">
         <el-col v-for="p in products" :key="p.id" :xs="12" :sm="8" :md="6" :lg="4">
@@ -671,7 +680,7 @@ onMounted(async () => {
 }
 
 .price {
-  color: var(--el-color-danger);
+  color: var(--price-color);
   font-weight: 600;
   font-size: 16px;
 }

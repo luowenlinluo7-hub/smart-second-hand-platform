@@ -2,6 +2,8 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { auditProduct, getAuditProducts } from '@/api/admin'
+import { CircleCheck } from '@element-plus/icons-vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { Product } from '@/types/api'
 
@@ -84,7 +86,12 @@ onMounted(fetchList)
       </template>
 
       <div v-loading="loading">
-        <el-empty v-if="!loading && list.length === 0" description="暂无待审核商品" />
+        <EmptyState
+          v-if="!loading && list.length === 0"
+          :icon="CircleCheck"
+          title="没有待审核的商品"
+          description="卖家新提交的商品会自动出现在这里"
+        />
 
         <el-table v-else :data="list" style="width: 100%">
           <el-table-column label="商品" min-width="280">
@@ -117,7 +124,7 @@ onMounted(fetchList)
         </el-table>
       </div>
 
-      <div class="pagination">
+      <div v-if="total > 0" class="pagination">
         <el-pagination
           :current-page="page"
           :page-size="pageSize"
