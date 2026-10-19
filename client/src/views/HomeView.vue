@@ -370,21 +370,24 @@ onMounted(async () => {
         @action="onReset"
       />
 
-      <el-row v-else :gutter="16">
-        <el-col v-for="p in products" :key="p.id" :xs="12" :sm="8" :md="6" :lg="4">
+      <el-row v-else :gutter="16" class="product-grid">
+        <el-col v-for="p in products" :key="p.id" :xs="12" :sm="8" :md="6" :lg="6">
           <el-card shadow="hover" class="product-card" @click="goDetail(p.id)">
             <div class="cover">
               <img v-if="p.images && p.images.length" :src="p.images[0]" alt="封面" />
               <div v-else class="cover-placeholder">暂无图片</div>
             </div>
-            <div class="title">{{ p.title }}</div>
-            <div class="meta">
+            <div class="title" :title="p.title">{{ p.title }}</div>
+            <div class="price-row">
               <span class="price">¥{{ p.price }}</span>
-              <span class="condition">{{ CONDITION_LABEL[p.condition] }}</span>
             </div>
             <div class="meta-bottom">
-              <span>{{ p.category.name }}</span>
-              <span>{{ p.viewCount }} 浏览</span>
+              <span class="tags">
+                <span class="condition">{{ CONDITION_LABEL[p.condition] }}</span>
+                <span class="dot">·</span>
+                <span class="category">{{ p.category.name }}</span>
+              </span>
+              <span class="views">{{ p.viewCount }} 浏览</span>
             </div>
           </el-card>
         </el-col>
@@ -637,66 +640,122 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
 }
 
-.product-card {
-  margin-bottom: 16px;
-  cursor: pointer;
+/* ---------- 商品卡片 ---------- */
+/* 同一行卡片等高：el-row 是 flex 容器，el-col 默认会被拉伸，
+   这里让卡片自身撑满 el-col 的高度即可对齐 */
+.product-grid :deep(.el-col) {
+  display: flex;
 }
 
+.product-card {
+  width: 100%;
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 封面用固定比例而不是固定高度：栅格换列数时比例不变，视觉大小始终一致。
+   浅暖灰底 + 极浅描边，让白底商品图（如 AirPods）也能看出边界。 */
 .cover {
-  height: var(--card-cover-h);
+  aspect-ratio: var(--card-cover-ratio);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--el-fill-color-light);
-  border-radius: 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--el-border-radius-base);
 }
 
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .cover-placeholder {
+  font-size: 12px;
   color: var(--el-text-color-placeholder);
 }
 
+/* 标题固定两行高度：短标题不塌、长标题截断，保证下方信息行水平对齐 */
 .title {
-  margin: 10px 0 6px;
+  margin: var(--space-1) 0 0;
   font-size: 14px;
+  line-height: 1.45;
+  min-height: calc(1.45em * 2);
   color: var(--el-text-color-primary);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
 }
 
-.meta {
+/* 价格单独一行：视觉权重最高，也不再和成色抢同一行导致截断 */
+.price-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-1);
-  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .price {
   color: var(--price-color);
   font-weight: 600;
-  font-size: 16px;
-}
-
-.condition {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: 17px;
   white-space: nowrap;
 }
 
+/* 底部信息固定贴到卡片底部，等高时不会上下浮动。
+   成色 / 分类 / 浏览量 三项在同一水平线上对齐 */
 .meta-bottom {
   display: flex;
   justify-content: space-between;
-  margin-top: 6px;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-top: auto;
   font-size: 12px;
   color: var(--el-text-color-placeholder);
+}
+
+.meta-bottom .tags {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta-bottom .condition {
+  color: var(--el-text-color-secondary);
+  flex: 0 0 auto;
+}
+
+.meta-bottom .dot {
+  flex: 0 0 auto;
+}
+
+.meta-bottom .category {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-bottom .views {
+  flex: 0 0 auto;
 }
 
 .pagination {
@@ -707,6 +766,32 @@ onMounted(async () => {
 
 /* ---------- 移动端 ---------- */
 @media (max-width: 767px) {
+  /* 卡片在窄屏变 2 列后内容宽度只剩 ~130px，
+     收紧内边距到 8px 才能让「成色 · 分类 + 浏览量」这行完整显示 */
+  .product-card :deep(.el-card__body) {
+    padding: var(--space-1);
+  }
+
+  .title {
+    font-size: 13px;
+  }
+
+  .price {
+    font-size: 16px;
+  }
+
+  .meta-bottom {
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  /* 窄屏两列时 154px 装不下「成色 · 分类 + 浏览量」三项，
+     分类信息已由封面和标题表达，这里只留成色与浏览量，避免任何截断 */
+  .meta-bottom .dot,
+  .meta-bottom .category {
+    display: none;
+  }
+
   /* Hero：收窄内边距，输入框与按钮纵向铺满，避免任何截断 */
   .hero {
     padding: var(--space-4) var(--space-2);

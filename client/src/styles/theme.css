@@ -41,9 +41,10 @@
   /* 图表高度：移动端在下方 @media 内整体收窄 */
   --chart-h-lg: 340px;
   --chart-h-md: 320px;
-  /* 商品详情轮播 / 首页卡片封面 */
+  /* 商品详情轮播高度 / 首页卡片封面比例 */
   --carousel-h: 320px;
-  --card-cover-h: 160px;
+  /* 首页商品卡封面统一按 4:3 裁切：无论原图是横是竖，卡片视觉大小完全一致 */
+  --card-cover-ratio: 4 / 3;
   /* 页面主区域左右内边距 */
   --main-padding: var(--space-2);
 
@@ -207,7 +208,6 @@ h3,
     --chart-h-lg: 260px;
     --chart-h-md: 240px;
     --carousel-h: 240px;
-    --card-cover-h: 120px;
     --main-padding: var(--space-1);
     /* Hero：标题缩到 24px（12 个汉字约 288px，390px 视口仍单行），
        输入框与圆角同步收小，避免在窄屏显得笨重 */
