@@ -14,6 +14,15 @@ const envSchema = z.object({
   CLIENT_DIST: z.string().optional(),
   // 图片上传目录：默认为 <cwd>/uploads，可用此项覆盖（演示包中固定在包内）
   UPLOAD_DIR: z.string().optional(),
+  // ---------- 图片存储驱动 ----------
+  // 三项都配齐时走 Cloudinary；缺任意一项则退回本地磁盘。
+  // 之所以做成「环境变量开关」而不是强制云端：本项目要保住断网演示与 E2E，
+  // 本地开发 / 服务器临时目录 / 断网答辩都不该被外部图床绑定。
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+  // Cloudinary 上的目录前缀，便于在控制台按项目归类
+  CLOUDINARY_FOLDER: z.string().default('smart-second-hand'),
   // AI 相关配置仅后端使用，前端永远拿不到
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_API_URL: z.string().optional(),
@@ -53,3 +62,9 @@ export const env = parsed.data;
 export const corsOrigins = env.CORS_ORIGIN.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+// 是否启用了 Cloudinary：三项凭据齐全才算启用，否则静默退回本地磁盘
+export const isCloudinaryEnabled =
+  Boolean(env.CLOUDINARY_CLOUD_NAME) &&
+  Boolean(env.CLOUDINARY_API_KEY) &&
+  Boolean(env.CLOUDINARY_API_SECRET);

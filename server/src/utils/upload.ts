@@ -2,15 +2,25 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
-import { env } from '../config/env';
+import { env, isCloudinaryEnabled } from '../config/env';
+import { cloudinaryStorage } from './cloudinary';
+
+// 图片上传：
+// - 配齐 CLOUDINARY_* 三项凭据 → 走 Cloudinary（适配 Railway / Vercel 这类
+//   临时文件系统的部署环境，重启不丢图）
+// - 没配 → 走本地磁盘（本地开发、断网答辩、E2E 全部不受影响）
+//
+// 两种驱动共用同一套 MIME / 扩展名白名单，安全策略不因切换而退化。
 
 // 上传目录：默认 <cwd>/uploads，可用 UPLOAD_DIR 覆盖（演示包中固定在包内）
 const uploadDir = env.UPLOAD_DIR
   ? path.resolve(env.UPLOAD_DIR)
   : path.resolve(process.cwd(), 'uploads');
 
-// 确保目录存在（multer 磁盘存储不会自动建目录）
-fs.mkdirSync(uploadDir, { recursive: true });
+// 只有本地驱动才需要真实目录
+if (!isCloudinaryEnabled) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // 允许的图片类型
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -29,7 +39,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/gif': '.gif',
 };
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
     // 优先用 MIME 映射出的扩展名；映射不到时再退回 originalname，
@@ -48,7 +58,7 @@ const storage = multer.diskStorage({
 
 // 多图上传：字段名 files，最多 9 张，单张 ≤5MB
 export const uploadImages = multer({
-  storage,
+  storage: isCloudinaryEnabled ? cloudinaryStorage : diskStorage,
   limits: { fileSize: 5 * 1024 * 1024, files: 9 },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
@@ -56,7 +66,7 @@ export const uploadImages = multer({
       return;
     }
     // 扩展名白名单：有扩展名时必须合法（防止 .html / .svg / .js 蒙混过关）。
-    // 无扩展名（部分客户端直接给 blob）时不阻断，落盘名由 MIME 决定。
+    // 无扩展名（部分客户端直接给 blob）时不阻断，文件名由服务端决定。
     const ext = path.extname(file.originalname).toLowerCase();
     if (ext && !ALLOWED_EXT.has(ext)) {
       cb(new Error('仅支持 jpg / png / webp / gif 图片'));
@@ -66,5 +76,8 @@ export const uploadImages = multer({
   },
 });
 
-// 供 app.ts 静态托管使用
+// 当前生效的驱动，供启动日志与健康检查观测
+export const imageDriver: 'cloudinary' | 'local' = isCloudinaryEnabled ? 'cloudinary' : 'local';
+
+// 供 app.ts 静态托管使用（仅本地驱动下需要注册该路由）
 export { uploadDir };

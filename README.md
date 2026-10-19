@@ -64,7 +64,7 @@
 - **看板全部真实聚合**：用户数 / 订单状态分组 / 销量 Top5 / 近 N 天 GMV 趋势（原生 SQL 按天聚合 + 时区对齐），金额全用 `Decimal` 不丢精度。
 - **统一响应信封**：所有接口返回 `{ code, message, data }`，前端拦截器统一处理 401/403/429。
 - **上传安全**：MIME→扩展名映射（不信任用户文件名）+ `nosniff` + `CSP sandbox`，杜绝「图片头伪装成 HTML」的同源脚本执行。
-- **可测性**：81 条**零依赖**端到端用例（Node 内置 `fetch`，不引 Jest/Supertest），CI 里跑真实 MySQL。
+- **可测性**：84 条**零依赖**端到端用例（Node 内置 `fetch`，不引 Jest/Supertest），CI 里跑真实 MySQL。
 
 ---
 
@@ -74,6 +74,7 @@
 | --- | --- |
 | 前端 | Vue 3.5（`<script setup lang="ts">`，无 `any`）· Vite 8 · Vue Router 5 · Pinia 4 · Element Plus 2 · ECharts 6 · Axios |
 | 后端 | Node ≥ 20 · Express 5 · TypeScript 5（`strict`）· Prisma 6 · MySQL 8 · JWT · bcryptjs · zod · helmet · express-rate-limit |
+| 图片 | multer + 可切换驱动：本地磁盘（默认，断网可用）/ Cloudinary（配齐凭据自动启用） |
 | AI | DeepSeek Chat Completions（仅后端调用，Key 永不下发前端）+ SSE 流式 |
 | 设计 | Noto Serif SC / Noto Sans SC 本地打包（断网可用）· 暖橙 `#ff6b35` 主题 · ECharts 品牌色板 |
 | 工程 | 双端 `typecheck` + `build` · GitHub Actions CI · 零依赖 E2E · Docker（MySQL）· PM2 + Nginx |
@@ -278,7 +279,7 @@ AI_MOCK=true
 | 费用 | 0，且**完全离线可用**（答辩现场断网也能演示） |
 
 同一套降级链路在「模型超时 / 返回无法解析」时也会自动生效（`source=fallback`），
-所以线上不会因为第三方抖动而白屏。本项目的 CI 就是用 `AI_MOCK=true` 跑通全部 81 条用例的。
+所以线上不会因为第三方抖动而白屏。本项目的 CI 就是用 `AI_MOCK=true` 跑通全部 84 条用例的。
 
 > 想要真实模型效果：申请 [DeepSeek](https://platform.deepseek.com/) Key 填入 `DEEPSEEK_API_KEY`，把 `AI_MOCK` 设为 `false`。
 > Key 只在后端使用，前端代码与构建产物中不会出现。
@@ -287,7 +288,7 @@ AI_MOCK=true
 
 ## 测试
 
-零依赖端到端测试（Node 内置 `fetch`，不需要 Jest / Supertest），共 **81 条用例**，
+零依赖端到端测试（Node 内置 `fetch`，不需要 Jest / Supertest），共 **84 条用例**，
 打真实 HTTP 接口 + 真实 MySQL：
 
 ```bash
@@ -299,13 +300,13 @@ cd ..
 npm run test:e2e
 ```
 
-当前结果：**81 通过 / 0 失败 / 2 跳过**（跳过项需要真实模型输出，`AI_MOCK` 下不适用）。
+当前结果：**84 通过 / 0 失败 / 2 跳过**（跳过项需要真实模型输出，`AI_MOCK` 下不适用）。
 
 | Suite | 覆盖内容 |
 | --- | --- |
 | 0. 环境前置检查 | 服务可达性、seed 演示账号可登录（未启动时快速失败并给出提示） |
 | 1. 用户模块 | 注册（重复邮箱 409 / 弱密码 400）、登录（错密码 / 未知账号 401）、`/me` 鉴权、改资料、**改密码后旧密码失效新密码可用** |
-| 2. 商品模块 | USER 发布 403 → SELLER 发布 `PENDING_REVIEW` → 审核通过上架 → `viewCount` 自增 → 编辑权限 → 下架 → 重新上架；分页 / 价格 / 分类参数校验 |
+| 2. 商品模块 | USER 发布 403 → SELLER 发布 `PENDING_REVIEW` → 审核通过上架 → `viewCount` 自增 → 编辑权限 → 下架 → 重新上架；分页 / 价格 / 分类参数校验；**图片上传（返回可用 URL + 当前驱动、非图片拒绝、未登录 401）** |
 | 3. 订单模块 | 下单（商品转 `SOLD`）→ 付款 → 发货 → 收货 → 评价；重复下单 409、越权流转 403、非参与方 403、取消订单回滚商品、**评价落库核对** |
 | 4. AI 模块 | `/parse`、`/search` 结构契约（`source ∈ {ai, mock, fallback}`、只返回在售）、检索相关性、SSE `/chat` 事件协议与三阶段管线顺序 |
 | 5. 管理员看板 | 401 / 403 权限边界、六大区块结构、金额精度、趋势数组长度与日期窗口、状态分布口径一致性 |
@@ -348,7 +349,7 @@ smart-second-hand-platform/
 │       ├── routes/             路由表
 │       ├── services/           业务逻辑（订单状态机、AI、看板聚合…）
 │       └── utils/              统一响应、JWT、密码、上传安全
-├── scripts/e2e/                零依赖端到端测试（81 条）
+├── scripts/e2e/                零依赖端到端测试（84 条）
 ├── docs/
 │   ├── deploy.md               部署手册（PM2+Nginx / Vercel+Railway）
 │   ├── known-issues.md         已知问题与修复方向

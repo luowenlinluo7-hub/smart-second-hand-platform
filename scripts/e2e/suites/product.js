@@ -272,6 +272,55 @@ const run = async () => {
     context.product.thirdId = cancel.id;
   });
 
+  // ---------- 图片上传（覆盖存储驱动切换的回归）----------
+  await test('登录用户上传图片返回可用的 URL 与当前驱动', async () => {
+    // 1x1 PNG：极小体积，两种驱动都能处理
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const res = await api.upload('/api/upload', {
+      token: context.tokens.temp,
+      files: [{ name: 'e2e.png', content: png, type: 'image/png' }],
+    });
+    assert.biz(res, 0, 200, '图片上传');
+    assert.envelope(res, '图片上传');
+
+    const { urls, driver } = res.body.data;
+    assert.ok(Array.isArray(urls) && urls.length === 1, '应返回 1 个 URL');
+    assert.ok(['local', 'cloudinary'].includes(driver), `driver 应为 local/cloudinary，实际 ${driver}`);
+
+    const url = urls[0];
+    if (driver === 'local') {
+      assert.ok(url.startsWith('/uploads/'), `本地上传应返回 /uploads/ 相对路径，实际 ${url}`);
+      // 本地上传的文件必须真的能取到，且带 nosniff（防伪装成 HTML）
+      const head = await fetch(`${api.baseUrl}${url}`, { method: 'HEAD' });
+      assert.equal(head.status, 200, '上传后的文件可访问');
+      assert.equal(
+        head.headers.get('x-content-type-options'),
+        'nosniff',
+        '上传目录需带 nosniff',
+      );
+    } else {
+      assert.ok(url.startsWith('https://res.cloudinary.com/'), `云端上传应返回绝对地址，实际 ${url}`);
+    }
+  });
+
+  await test('非图片文件被拒绝（400）', async () => {
+    const res = await api.upload('/api/upload', {
+      token: context.tokens.temp,
+      files: [{ name: 'evil.html', content: '<script>alert(1)</script>', type: 'text/html' }],
+    });
+    assert.biz(res, codes.PARAM_ERROR, 400, '非图片上传');
+  });
+
+  await test('未登录上传返回 401', async () => {
+    const res = await api.upload('/api/upload', {
+      files: [{ name: 'a.png', content: Buffer.from('x'), type: 'image/png' }],
+    });
+    assert.equal(res.http, 401, '未登录上传的状态码');
+  });
+
   // ---------- 图片可访问性（需要前端源站，默认跳过）----------
   const frontendUrl = (process.env.E2E_FRONTEND_URL || '').replace(/\/$/, '');
   if (!frontendUrl) {

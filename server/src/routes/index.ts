@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { imageDriver } from '../utils/upload';
 import { success } from '../utils/response';
 import adminRouter from './admin';
 import aiRouter from './ai';
@@ -12,12 +13,14 @@ import userRouter from './user';
 // /api 下的路由总入口，后续模块（auth / products / orders ...）都在此挂载
 const router = Router();
 
-// 健康检查：不鉴权、不依赖数据库，用于探活与部署自检
+// 健康检查：不鉴权、不依赖数据库，用于探活与部署自检。
+// 顺带暴露图片存储驱动，部署后无需登录就能确认「上传到底走云还是走本地盘」。
 router.get('/health', (_req, res) => {
   res.json(
     success({
       status: 'ok',
       service: 'smart-second-hand-server',
+      imageDriver,
       uptime: Number(process.uptime().toFixed(3)),
       timestamp: new Date().toISOString(),
     }),

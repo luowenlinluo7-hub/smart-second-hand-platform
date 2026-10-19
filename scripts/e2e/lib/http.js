@@ -19,9 +19,10 @@ class HttpError extends Error {
 
 // 单次请求：返回 { http, body, text, ms, headers }
 const request = async (method, path, options = {}) => {
-  const { token, body, timeoutMs = DEFAULT_TIMEOUT_MS, raw = false } = options;
+  const { token, body, form, timeoutMs = DEFAULT_TIMEOUT_MS, raw = false } = options;
 
   const headers = {};
+  // form 为 FormData 时交给 fetch 自己带 boundary，绝不能手动设 Content-Type
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -31,7 +32,7 @@ const request = async (method, path, options = {}) => {
     response = await fetch(`${baseUrl}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: form ?? (body === undefined ? undefined : JSON.stringify(body)),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -75,6 +76,20 @@ const api = {
   put: (path, options) => request('PUT', path, options),
   patch: (path, options) => request('PATCH', path, options),
   delete: (path, options) => request('DELETE', path, options),
+
+  // multipart 上传：files 为 [{ name, content, type }]，用内置 FormData + Blob，
+  // 依然零依赖。用于覆盖 /api/upload 的存储驱动切换。
+  upload: (path, options = {}) => {
+    const form = new FormData();
+    for (const file of options.files ?? []) {
+      form.append(
+        'files',
+        new Blob([file.content], { type: file.type }),
+        file.name,
+      );
+    }
+    return request('POST', path, { token: options.token, form, timeoutMs: options.timeoutMs });
+  },
 
   // 登录并取回 { token, user }；失败直接抛错，避免后续用例连锁误报
   login: async (account, password) => {

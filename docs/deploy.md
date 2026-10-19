@@ -226,18 +226,31 @@ pm2 restart smart-second-hand
 - **Root Directory**：`server`
 - **Build Command**：`npm ci && npx prisma generate && npm run build`
 - **Start Command**：`node dist/index.js`
-- 环境变量：`NODE_ENV=production`、`DATABASE_URL`、`JWT_SECRET`、`CORS_ORIGIN=https://你的前端.vercel.app`、`AI_MOCK=true`（或有 Key 时填 `DEEPSEEK_API_KEY`）
-- ⚠️ **上传目录**：Railway 容器文件系统是临时的，重启会丢图。要么挂 Volume 并把 `UPLOAD_DIR` 指过去，要么把图片改成对象存储（OSS/S3）。演示项目挂 Volume 即可。
+- 环境变量：
+  - `NODE_ENV=production`
+  - `DATABASE_URL`（第 1 步拿到的云库地址）
+  - `JWT_SECRET`
+  - `CORS_ORIGIN=https://smart-second-hand.vercel.app`
+  - `AI_MOCK=true`（或有 Key 时填 `DEEPSEEK_API_KEY`）
+  - **图片存储**：`CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`
+- ⚠️ **为什么必须配 Cloudinary**：Railway 容器文件系统是临时的，重启即丢。
+  三项凭据配齐后上传自动切到云端（`GET /api/health` 的 `imageDriver` 会变成 `cloudinary`）；
+  不配则退回本地盘，重启后图片全部 404。
+  替代方案是挂 Railway Volume 并设 `UPLOAD_DIR` 指向它，但多实例时会不一致，云端更省心。
+- 部署完访问 `https://<你的后端>.up.railway.app/api/health`，确认
+  `{"imageDriver":"cloudinary"}` 再继续。
 
 ### 3. 前端（Vercel）
 
 - Import Project → **Root Directory** 选 `client`
 - Framework：**Vite**；Build：`npm run build`；Output：`dist`
+- 后端 `CORS_ORIGIN` 里填 Vercel 的域名：`https://smart-second-hand.vercel.app`
+  （预览部署的 `<project>-<hash>-<scope>.vercel.app` 由后端代码里的正则自动放行，不用逐个加）
 - **关键：跨域怎么解决**
 
   前端所有请求都用相对路径 `/api`（`client/src/api/request.ts` 的 `baseURL = '/api'`，
   SSE 也是 `fetch('/api/ai/chat')`），因此最省事的做法是让 Vercel 把 `/api` 反代到后端，
-  保持同源（**不需要改任何代码，也不需要配 CORS**）。在 `client/vercel.json` 加：
+  保持同源。在 `client/vercel.json` 加：
 
   ```json
   {
@@ -254,17 +267,53 @@ pm2 restart smart-second-hand
   }
   ```
 
-- 若你更想直连后端（例如要给移动端复用），则需要把 `baseURL` 改成
+  > 只在**本地驱动**下才需要第二条 `/uploads` rewrite；
+  > 用 Cloudinary 时图片是绝对地址，直接由 `res.cloudinary.com` 提供，可以删掉。
+  >
+  > 另外 CORS 白名单与 rewrite 并不冲突：rewrite 让浏览器侧变成同源（更简单），
+  > CORS 则保证「前端直连后端」这条路也能走（例如将来接移动端）。
+
+- 若你更想直连后端（直接跨域，不经过 Vercel 代理），把 `baseURL` 改成
   `import.meta.env.VITE_API_BASE ?? '/api'`，同时改 `client/src/api/aiChat.ts` 里的
-  `fetch('/api/ai/chat')`，并在 Vercel 配 `VITE_API_BASE`、在后端配 `CORS_ORIGIN`。
+  `fetch('/api/ai/chat')`，并在 Vercel 配 `VITE_API_BASE`。
+  后端已放行 `https://smart-second-hand.vercel.app` 与所有 `*.vercel.app` 预览域名。
 
-> SSE 走 Vercel 反代是可用的（Vercel 支持流式响应），但记得后端不要被任何中间层加缓冲。
+### 4. SSE 在 Vercel 代理下的注意事项
 
-### 4. 跨域与安全头
+后端已经把能做的都做了（`X-Accel-Buffering: no`、`Content-Encoding: identity`、
+`Cache-Control: no-cache, no-transform`、开流即发 `: stream-open`、10s 心跳），
+浏览器侧只要用 `fetch` + `ReadableStream` 逐块解析即可（本项目已如此实现）。
 
-- 按上面的 Vercel rewrite 方案，浏览器侧全是同源请求，`CORS_ORIGIN` 保持默认即可
-- 如果改成直连后端，则 `CORS_ORIGIN` 必须包含 `https://你的前端.vercel.app`（含协议，不要写 `*`）
-- helmet 已内置 CSP；后端只返回 JSON 时不受影响，同源托管前端时已针对 Element Plus 内联样式放开
+部署侧还要注意：
+
+| 项 | 要求 |
+| --- | --- |
+| Vercel 侧压缩 | 关闭（`vercel.json` 不要启用 gzip/brotli 相关配置，默认也不会对流式响应压缩） |
+| 中间 CDN | Cloudflare 等如果要接，关掉「Rocket Loader」与响应压缩，否则会攒批 |
+| 代理读超时 | 不小于 `AI_CHAT_TIMEOUT_MS`（默认 30s） |
+| 前端读取方式 | 必须 `fetch`，不能用 `EventSource`（本接口是 POST + JSON body） |
+
+验证方法（部署后直接对代理地址测）：
+
+```bash
+curl -N -X POST https://smart-second-hand.vercel.app/api/ai/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"2000 以内的游戏本"}'
+```
+
+正常表现：**第一行立刻出现 `: stream-open`**，随后逐条出现 `event: thought` / `event: delta`。
+如果 3 秒内一个字节都没回来，说明中间层在缓冲。
+
+### 5. 跨域与安全头
+
+- 后端 CORS 采用「显式白名单 + `*.vercel.app` 预览域名正则」，
+  不放行的来源不会返回 `Access-Control-Allow-Origin`（浏览器自然拦住），
+  但服务端不抛错，避免日志里堆 500
+- helmet 已内置 CSP：
+  - 同源托管前端时已针对 Element Plus 内联样式放开 `style-src`
+  - **启用 Cloudinary 时 `img-src` 会自动加上 `https://res.cloudinary.com`**
+    （不加的话上传后的商品图会被浏览器以 CSP 为由拦掉，这是最容易踩的坑）
+  - `connect-src` 会加上 `https://api.cloudinary.com`
 
 ---
 
@@ -272,11 +321,15 @@ pm2 restart smart-second-hand
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| AI 回答一次性蹦出来，没有打字效果 | Nginx 缓冲区把 SSE 攒批了 | `proxy_buffering off; proxy_cache off;` |
+| AI 回答一次性蹦出来，没有打字效果 | 中间层把 SSE 攒批了 | Nginx: `proxy_buffering off;`；CDN: 关压缩；见第三节第 4 小节 |
 | 上传图片 413 | Nginx 默认 `client_max_body_size 1M` | 调到 `10M` |
-| 重启后图片全 404 | 容器/临时磁盘 | `UPLOAD_DIR` 指向持久卷，或改用对象存储 |
+| 重启后图片全 404 | 用了本地驱动但磁盘是临时的 | 配齐 `CLOUDINARY_*` 三项切云端，或 `UPLOAD_DIR` 指向持久卷 |
+| 上传报「图片上传到云端失败：Invalid Signature」 | `CLOUDINARY_API_SECRET` 填错 / 多了引号或空格 | 到 Cloudinary 控制台重新复制；`.env` 里不要带多余空格 |
+| 上传成功但商品图裂图、控制台报 CSP | `img-src` 没放行 Cloudinary | 本仓库已自动处理；若自己改过 helmet，需加 `https://res.cloudinary.com` |
+| `/api/health` 里 `imageDriver` 仍是 `local` | 凭据没配齐（三项缺一即回落） | 检查三个变量是否都存在值（空字符串也算缺） |
 | 前端请求 401 后又跳登录 | Token 过期（默认 7 天） | 重新登录；或调 `JWT_EXPIRES_IN` |
 | 部署后报 `P1001 无法连接数据库` | 云库未开放公网 / 端口不对 | 检查 `DATABASE_URL` 端口与白名单 |
+| 浏览器报 CORS 错误 | 前端域名不在白名单 | 写进 `CORS_ORIGIN`；`*.vercel.app` 预览域名已自动放行 |
 | 中文乱码 / `Incorrect string value` | 库表不是 `utf8mb4` | 建库时指定 `CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` |
 | 看板日期与本地差 8 小时 | 数据库/应用时区不一致 | 统一设 `TZ=Asia/Shanghai`，MySQL 用 `--default-time-zone='+08:00'` |
 | 登录提示「失败次数过多」 | 触发了限流（15 分钟） | 等窗口结束，或调大 `AUTH_RATE_LIMIT_MAX` |
@@ -288,9 +341,11 @@ pm2 restart smart-second-hand
 - [ ] `JWT_SECRET` 已换成随机串，且未提交进仓库
 - [ ] `NODE_ENV=production`
 - [ ] `prisma migrate deploy` 已执行（不是 `migrate dev`）
-- [ ] `/uploads` 有持久化卷与备份
+- [ ] `GET /api/health` 返回的 `imageDriver` 符合预期（云部署应为 `cloudinary`）
+- [ ] `/uploads` 有持久化卷与备份（仅本地驱动时）
 - [ ] HTTPS 证书生效，HTTP 自动跳转
-- [ ] `CORS_ORIGIN` 只包含自己的域名
+- [ ] `CORS_ORIGIN` 只包含自己的域名（不要写 `*`）
+- [ ] SSE 已验证：`curl -N` 第一行立刻返回 `: stream-open`
 - [ ] 演示账号密码已按需修改（或删除 `seed` 生成的账号）
 - [ ] `pm2 save` + `pm2 startup` 已配置
 - [ ] 数据库定时备份已生效

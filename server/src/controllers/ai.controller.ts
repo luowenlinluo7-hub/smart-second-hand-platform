@@ -68,8 +68,10 @@ export const parse = async (req: Request, res: Response): Promise<void> => {
   res.json(success({ parsed: outcome.filters, source: outcome.source, note: outcome.note }));
 };
 
-// 心跳间隔：防止中间代理把长时间没有数据的连接掐掉
-const HEARTBEAT_MS = 15_000;
+// 心跳间隔：防止中间代理把长时间没有数据的连接掐掉。
+// Vercel 的 rewrite 代理与多数 CDN 对「静默连接」都比较敏感，
+// 10s 一次注释帧既够轻（每帧 8 字节），又能稳定保活。
+const HEARTBEAT_MS = 10_000;
 
 // POST /api/ai/chat —— AI 导购助手（SSE 流式）
 //
@@ -83,8 +85,11 @@ export const chat = async (req: Request, res: Response): Promise<void> => {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
-  // 关掉 Nginx 等反向代理的缓冲，否则流会被攒起来一次性下发
+  // 关掉 Nginx / Vercel 等反向代理的缓冲，否则流会被攒起来一次性下发
   res.setHeader('X-Accel-Buffering', 'no');
+  // 显式声明不压缩：一旦中间层启用 gzip/br，压缩器会攒够一批再输出，
+  // 流式效果立刻退化成「一次性蹦出来」。identity 表示不做内容编码。
+  res.setHeader('Content-Encoding', 'identity');
   res.flushHeaders();
 
   const send = (event: string, data: unknown): void => {
@@ -92,9 +97,20 @@ export const chat = async (req: Request, res: Response): Promise<void> => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  // 立即写一帧注释（SSE 规范里以 ':' 开头会被客户端忽略）：
+  // 让代理与浏览器「立刻」确认这是一条已建立的流，而不是在等首个字节。
+  // 首包越早，代理越不会因为「迟迟没有响应体」而超时断开。
+  // 若服务器挂了 compression 中间件，flush 能保证这一帧真的发出去。
+  res.write(': stream-open\n\n');
+  (res as Response & { flush?: () => void }).flush?.();
+
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) res.write(': ping\n\n');
+    if (!res.writableEnded) {
+      res.write(': ping\n\n');
+      (res as Response & { flush?: () => void }).flush?.();
+    }
   }, HEARTBEAT_MS);
+
 
   const controller = new AbortController();
   // 用户点「停止生成」或关闭页面时触发：

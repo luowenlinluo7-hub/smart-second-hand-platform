@@ -207,15 +207,28 @@ JSON.stringify(price)   // "1899"
 ### 4.3.1 图片上传 · `/api/v1/upload`
 | 方法 | 路径 | 鉴权 | 请求参数 | 响应 `data` |
 | --- | --- | --- | --- | --- |
-| POST | `/upload` | 登录 | `multipart/form-data`，字段 `files`（多文件，≤9 张，单张 ≤5MB） | `{ urls: string[] }` |
+| POST | `/upload` | 登录 | `multipart/form-data`，字段 `files`（多文件，≤9 张，单张 ≤5MB） | `{ urls: string[], driver: 'cloudinary' \| 'local' }` |
 
-> 支持 jpg / png / webp / gif；文件存 `server/uploads/`，经 `/uploads/<filename>` 静态托管。
-> 前端 vite 已配置 `/uploads` 代理到后端 3000。生产环境建议换 OSS/CDN。
+> 支持 jpg / png / webp / gif。**存储驱动由环境变量决定，两种驱动共用同一套 MIME / 扩展名白名单**：
+>
+> | 条件 | 驱动 | 返回的 `urls` |
+> | --- | --- | --- |
+> | `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET` 三项齐全 | `cloudinary` | 绝对地址 `https://res.cloudinary.com/<cloud>/image/upload/...` |
+> | 缺任意一项（默认） | `local` | 站内相对路径 `/uploads/<filename>` |
+>
+> 默认走本地盘是为了保住「断网可用」：本地开发、E2E、答辩离线演示都不该被外部图床绑定。
+> 部署到 Railway / Vercel 这类临时文件系统的环境时，配齐上面三项即可切到云端，重启不丢图。
+> 当前生效的驱动可从 `GET /api/health` 的 `imageDriver` 字段直接读到。
+>
+> 云端驱动下 `/uploads` 静态托管不再注册；本地驱动下仍由后端托管，并附带
+> `X-Content-Type-Options: nosniff` 与 `Content-Security-Policy: default-src 'none'; sandbox`，
+> 防止「图片头伪装成 HTML」造成同源脚本执行。
+> 文件名 / `public_id` 一律由服务端生成，**不沿用用户上传的原始文件名**。
 >
 > **图片字段接受两种格式**（`商品 images` / `评价晒图 images` / `用户头像 avatar`）：
-> 1. 站内相对路径：`/uploads/1791614783752-5df3ca2b7f28.png`（用户上传）
+> 1. 站内相对路径：`/uploads/1791614783752-5df3ca2b7f28.png`（本地上传）
 >    或 `/demo/p1.jpg`（平台内置示例图，seed 数据使用，保证断网时不裂图）
-> 2. 外部完整链接：`https://example.com/a.jpg`
+> 2. 完整链接：`https://res.cloudinary.com/...`（云端上传）或任意 `https://example.com/a.jpg`
 >
 > ⚠️ 后端校验**不可用** `z.string().url()` —— 它要求完整协议，会拒绝站内相对路径。
 > 统一使用 `server/src/utils/validators.ts` 的 `imageUrlSchema`。
@@ -434,7 +447,20 @@ JSON.stringify(price)   // "1899"
 `parseSource` / `replySource` 取值：`ai`（真实模型）/ `mock`（本地规则）/ `fallback`（降级）。
 `parseSource` 为 `null` 表示本轮是商品细节追问（如「这件成色怎么样」），未解析条件。
 
-另外每 15 秒发送一次 `: ping` 心跳注释，防止中间代理掐断连接。
+另外每 **10 秒**发送一次 `: ping` 心跳注释，防止中间代理掐断连接。
+连接建立后**立刻**先写一帧 `: stream-open`，让代理与浏览器马上确认「流已建立」，
+而不是等到第一个真实事件才收到首字节。
+
+**部署在反向代理 / Vercel 之后时的注意事项**
+
+| 项 | 做法 | 原因 |
+| --- | --- | --- |
+| `X-Accel-Buffering: no` | 已由后端固定下发 | Nginx 默认会缓冲响应体，流会被攒批 |
+| `Content-Encoding: identity` | 已由后端固定下发 | 一旦中间层启用 gzip/br，压缩器会攒够一批再输出 |
+| `Cache-Control: no-cache, no-transform` | 已由后端固定下发 | 禁止 CDN / 代理改写或缓存流 |
+| 平台侧压缩 | **必须关闭**（如 Vercel 的压缩、Cloudflare 的 Brotli） | 压缩与「逐帧输出」天然冲突 |
+| 代理读超时 | 不小于 `AI_CHAT_TIMEOUT_MS`（默认 30s） | 否则长回答会被中途切断 |
+| 前端调用方式 | 用 `fetch` + `ReadableStream` 读，不要用 `EventSource` | `EventSource` 只支持 GET，而本接口是 POST + JSON body |
 
 **三阶段管线**
 
