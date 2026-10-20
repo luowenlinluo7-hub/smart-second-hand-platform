@@ -2,8 +2,13 @@ import axios, { type AxiosInstance } from 'axios'
 import type { ApiResponse } from '@/types/api'
 
 // 开发环境走 vite 代理（/api -> http://localhost:3000），因此这里用相对路径
+// 读取 Vercel 配置的环境变量；如果没有（本地开发），则回退到 '/api' 走 Vite 代理
+const baseURL = import.meta.env.VITE_API_BASE_URL 
+  ? `${import.meta.env.VITE_API_BASE_URL}/api` 
+  : '/api'
+
 const instance: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL,
   timeout: 15000,
 })
 
