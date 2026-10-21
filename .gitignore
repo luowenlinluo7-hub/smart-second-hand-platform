@@ -22,7 +22,10 @@ Thumbs.db
 *.db
 # 涓婁紶鏂囦欢
 uploads/
-# 临时提交信息文件
+# 锟斤拷时锟结交锟斤拷息锟侥硷拷
 commit_msg_temp.txt
 
 server/uploads/
+
+# 绂荤嚎婕旂ず鐢ㄧ殑渚挎惡鏁版嵁搴擄紙涓�閿惎鍔ㄨ剼鏈嚜鍔ㄥ垱寤猴級
+.demo-db/

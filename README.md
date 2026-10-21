@@ -17,7 +17,7 @@
 
 🚀 **[在线体验](https://smart-second-hand-platform.vercel.app)**（`AI_MOCK` 演示模式，无需配置 Key）
 
-[功能一览](#功能一览) · [快速开始](#快速开始) · [离线演示](#没有-deepseek-key也能全功能演示) ·
+[功能一览](#功能一览) · [快速开始](#快速开始) · [一键离线演示](#一键离线演示答辩--断网场景) · [离线演示](#没有-deepseek-key也能全功能演示) ·
 [架构设计](#系统架构) · [测试](#测试) · [部署](docs/deploy.md) · [API 契约](server/docs/api-contract.md)
 
 </div>
@@ -266,6 +266,50 @@ cd client && npm run dev
 
 ---
 
+## 一键离线演示（答辩 / 断网场景）
+
+没有外网、没有 Docker、没有管理员权限也能跑起来：**双击根目录的 `start-demo.bat`**。
+
+```bat
+:: 双击即可，也可以带参数运行
+start-demo.bat                 :: 默认端口 3000，自动打开浏览器
+start-demo.bat -Port 3100      :: 换端口
+start-demo.bat -Rebuild        :: 强制重建前后端
+start-demo.bat -Reseed         :: 强制重灌演示数据
+```
+
+脚本会依次完成（每一步都有 `[OK]` 回显）：
+
+| 步骤 | 说明 |
+| --- | --- |
+| 环境自检 | Node、前后端 `node_modules`、`server/.env`；缺依赖能明确报错而不是跑到一半崩 |
+| 准备数据库 | 本机 3306 有 MySQL 就直接复用；没有就用已装的 MySQL 二进制在本地起一个**便携实例**（3307），无需管理员权限、无需 Docker 服务 |
+| 同步结构 | `prisma migrate deploy`（幂等） |
+| 灌演示数据 | 库里没有商品时自动 `seed`（幂等，已有数据则跳过） |
+| 构建 | `client/dist`、`server/dist` 缺失时才构建（约 10 秒） |
+| 启动 | 后端**同源托管**前端 `dist`，一个端口同时提供页面和 `/api`，没有跨域也没有反向代理 |
+| 强制离线 | `AI_MOCK=true` + 清空 Cloudinary 凭据 → AI 走本地规则、图片存本地磁盘，**全程零外网请求** |
+
+启动后访问 <http://localhost:3000>，演示账号见上一节。
+
+**停止**：在窗口里按 `Ctrl+C` 或直接关闭窗口即可自动清理。
+若窗口被强杀导致端口占用，运行 `stop-demo.bat`（只清理演示用的 node 与便携 mysqld，不碰本机 MySQL 服务）。
+
+**离线包完整性**（已验证）：
+
+- 25 张商品图在 `client/public/demo/`，构建后随 `dist` 发布，无外链
+- 字体经 `@fontsource` 本地打包（3 个 woff2，共 3.7 MB），不连 Google Fonts
+- 构建产物中**无任何外部主机名**，`index.html` 无 CDN 引用
+- AI 搜索与 AI 流式对话在 `AI_MOCK=true` 下功能完整
+
+> **两个注意点**
+> 1. 便携数据库的数据目录固定在**纯 ASCII 路径**（`%LOCALAPPDATA%\smart-second-hand-demo`）。
+>    这是踩过的坑：`datadir` 位于含中文的路径（如 `F:\二手app\...`）时，`mysqld --initialize` 会成功，
+>    但随后启动静默失败（退出码 1、无日志），所以脚本会自动避开中文路径。
+> 2. 便携实例首次启动会初始化约 180 MB 的数据目录（几秒），之后复用；删除该目录即可完全重置。
+
+---
+
 ## 没有 DeepSeek Key？也能全功能演示
 
 **这是本项目最想强调的一点：AI 不是硬依赖。**
@@ -357,11 +401,14 @@ smart-second-hand-platform/
 │       ├── services/           业务逻辑（订单状态机、AI、看板聚合…）
 │       └── utils/              统一响应、JWT、密码、上传安全
 ├── scripts/e2e/                零依赖端到端测试（84 条）
+├── scripts/demo/               离线演示一键启动 / 停止脚本
 ├── docs/
 │   ├── deploy.md               部署手册（PM2+Nginx / Vercel+Railway）
 │   ├── known-issues.md         已知问题与修复方向
 │   └── screenshots/            README 截图（WebP）
 ├── docker-compose.yml          一键起 MySQL
+├── start-demo.bat              离线演示一键启动（双击）
+├── stop-demo.bat               清理演示进程（端口被占时用）
 └── .github/workflows/ci.yml    类型检查 + 构建 + E2E
 ```
 
