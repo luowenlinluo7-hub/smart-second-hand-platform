@@ -281,7 +281,9 @@ function Start-Demo {
       while (Test-Port $dbPort) { $dbPort++ }
       $dbLog = Join-Path $demoDir 'mysqld.log'
       # 路径含空格，参数必须整体带引号传给 Start-Process
-      $argStr = "--basedir=`"$mysqlBase`" --datadir=`"$demoData`" --port=$dbPort --skip-log-bin --log-error=`"$dbLog`""
+      # 只监听本机回环：便携实例用 root 空密码，绝不能暴露到局域网
+      # （mysqld 默认 bind-address 是 *，即监听所有网卡）
+      $argStr = "--basedir=`"$mysqlBase`" --datadir=`"$demoData`" --port=$dbPort --bind-address=127.0.0.1 --skip-log-bin --log-error=`"$dbLog`""
       $script:mysqldProc = Start-Process -FilePath $mysqldExe -ArgumentList $argStr -PassThru -WindowStyle Hidden
 
       $ready = $false
