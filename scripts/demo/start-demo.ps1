@@ -66,6 +66,7 @@ $bundledMysqlBin = Join-Path $runtimeDir 'mysql\bin'
 
 $script:mysqldProc = $null
 $script:serverProc = $null
+$script:skipCleanup = $false
 
 # ---------- 输出 ----------
 
@@ -207,6 +208,10 @@ function Invoke-Npm {
 # ---------- 清理 ----------
 
 function Stop-Demo-Processes {
+  # 检测到「已有一套在运行」而提前返回时，绝不能清理：
+  # 那套服务正在用这个数据库，杀掉 mysqld 会让它变成 P1001。
+  if ($script:skipCleanup) { return }
+
   if ($script:serverProc -and -not $script:serverProc.HasExited) {
     Stop-Process -Id $script:serverProc.Id -Force -ErrorAction SilentlyContinue
   }
@@ -271,7 +276,10 @@ function Start-Demo {
   # 端口占用：先判断是不是本程序已经在跑
   while (Test-Port $Port) {
     if (Wait-HttpOk -Url "http://127.0.0.1:$Port/api/health" -TimeoutSec 2) {
-      Write-Warn2 "端口 $Port 上已有一套服务在运行，直接打开页面"
+      $script:skipCleanup = $true
+      Write-Ok "演示服务已在运行：http://localhost:$Port（不重复启动）"
+      Write-Note '停止方式：双击 stop-demo.bat，或关闭原来那个启动窗口'
+      Write-Note "注意：3000 端口被它占着，此时再跑 npm run dev 会端口冲突"
       if (-not $NoBrowser) { Start-Process "http://localhost:$Port" }
       return
     }

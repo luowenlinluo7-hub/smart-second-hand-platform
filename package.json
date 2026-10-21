@@ -4,6 +4,11 @@
   "private": true,
   "description": "智能二手交易平台 · 仓库根（仅承载跨端脚本；前端依赖见 client/，后端依赖见 server/）",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
     "test:e2e": "node scripts/e2e/run-all.js"
   },
   "engines": {

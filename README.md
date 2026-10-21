@@ -242,6 +242,21 @@ npm install
 
 ### 4. 启动
 
+**方式 A · 一个命令起两个服务**（在项目根目录，推荐）：
+
+```bash
+npm run dev        # 同时启动前端与后端，日志按 [server] / [client] 分色区分
+```
+
+也可以在根目录分别启动：
+
+```bash
+npm run dev:server   # 仅后端 → http://localhost:3000/api/health
+npm run dev:client   # 仅前端 → http://localhost:5173
+```
+
+**方式 B · 两个终端手动起**：
+
 ```bash
 # 终端 1：后端 → http://localhost:3000/api/health
 cd server && npm run dev
@@ -249,6 +264,9 @@ cd server && npm run dev
 # 终端 2：前端 → http://localhost:5173
 cd client && npm run dev
 ```
+
+> `npm run dev` 启动前会探测 3306：如果数据库没起来会直接给出提示（P1001 的根因），
+> 并列出三种处理方式。注意**根目录没有 MySQL 时后端虽然能启动，但业务接口会全部报错**。
 
 打开 <http://localhost:5173>，用下面的演示账号登录。
 
@@ -336,6 +354,9 @@ client/public/demo/     25 张商品图（已含在 dist 里）
 **停止**：在窗口里按 `Ctrl+C` 或直接关闭窗口即可自动清理（mysqld 在 Windows 上会派生子进程，
 脚本按数据目录匹配命令行，父子一并清理）。
 若窗口被强杀导致端口占用，运行 `stop-demo.bat`（只清理演示用的 node 与便携 mysqld，不碰本机 MySQL 服务）。
+
+> 重复双击 `start-demo.bat` 不会重复启动：检测到已有实例时会提示「已在运行」并打开页面，
+> **不会动那套实例正在使用的数据库**，然后停在本窗口等你按任意键，方便看清提示。
 
 **离线包完整性**（已验证）：
 
@@ -452,6 +473,7 @@ smart-second-hand-platform/
 │       └── utils/              统一响应、JWT、密码、上传安全
 ├── scripts/e2e/                零依赖端到端测试（84 条）
 ├── scripts/demo/               离线演示一键启动 / 停止脚本
+├── scripts/dev.mjs             根目录 npm run dev 的并行启动器（零依赖）
 ├── docs/
 │   ├── deploy.md               部署手册（PM2+Nginx / Vercel+Railway）
 │   ├── known-issues.md         已知问题与修复方向
