@@ -272,7 +272,8 @@ cd client && npm run dev
 
 ## 一键离线演示（答辩 / 断网场景）
 
-没有外网、没有 Docker、没有管理员权限也能跑起来：**双击根目录的 `start-demo.bat`**。
+没有外网、没有 Docker、没有管理员权限，甚至**目标机器没装 Node、没装 MySQL** 也能跑起来：
+**双击根目录的 `start-demo.bat`**。
 
 > 顶部的「在线体验」链接依赖外网；这一节是**纯本地运行**，全程零外网请求，
 > 适合答辩现场网络不可控、或学校断网环境。
@@ -285,21 +286,55 @@ start-demo.bat -Rebuild        :: 强制重建前后端
 start-demo.bat -Reseed         :: 强制重灌演示数据
 ```
 
+### 目标机器没有 Node / MySQL？先打包便携运行时
+
+在一台**已装 Node 和 MySQL 8** 的电脑上执行一次：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\demo\prepare-runtime.ps1
+```
+
+它会在项目根目录生成 `runtime/`（约 183 MB，已加入 `.gitignore`，不进仓库）：
+
+| 内容 | 体积 | 说明 |
+| --- | --- | --- |
+| `runtime/node.exe` | 88 MB | 便携 Node，直接运行无需安装、无需管理员权限 |
+| `runtime/mysql/` | 95 MB | 精简 MySQL：`mysqld`/`mysql`/`mysqladmin` + 15 个依赖 DLL + `share`（错误信息与字符集） |
+| `runtime/vcruntime140*.dll` 等 | < 1 MB | VC++ 运行库，防目标机器缺失 |
+
+打包完成后把**整个项目文件夹**拷到 U 盘即可。启动器会自动优先使用 `runtime/` 里的运行时，
+完全不依赖目标机器的 PATH。
+
+**拷贝清单**（缺一不可）：
+
+```
+runtime/                便携运行时
+client/dist/            前端构建产物（没有 npm 就无法现场构建）
+server/dist/            后端构建产物
+client/node_modules/    前端依赖
+server/node_modules/    后端依赖（含 Prisma 引擎）
+server/.env             JWT_SECRET / DATABASE_URL
+client/public/demo/     25 张商品图（已含在 dist 里）
+```
+
+### 启动脚本做了什么
+
 脚本会依次完成（每一步都有 `[OK]` 回显）：
 
 | 步骤 | 说明 |
 | --- | --- |
-| 环境自检 | Node、前后端 `node_modules`、`server/.env`；缺依赖能明确报错而不是跑到一半崩 |
-| 准备数据库 | 本机 3306 有 MySQL 就直接复用；没有就用已装的 MySQL 二进制在本地起一个**便携实例**（3307），无需管理员权限、无需 Docker 服务 |
-| 同步结构 | `prisma migrate deploy`（幂等） |
-| 灌演示数据 | 库里没有商品时自动 `seed`（幂等，已有数据则跳过） |
-| 构建 | `client/dist`、`server/dist` 缺失时才构建（约 10 秒） |
+| 环境自检 | 优先用 `runtime/node.exe`，没有才回落到 PATH；检查 `node_modules`、`server/.env` |
+| 准备数据库 | 本机 3306 有 MySQL 就直接复用；没有就用随包（或已装）的 MySQL 二进制在本地起**便携实例**，无需管理员权限、无需 Docker 服务 |
+| 同步结构 | 用 node 直接执行 Prisma CLI（`node node_modules/prisma/build/index.js migrate deploy`），**不需要 npm/npx** |
+| 灌演示数据 | 库里没有商品时自动 `node node_modules/tsx/dist/cli.mjs prisma/seed.ts`（幂等） |
+| 构建 | `dist` 缺失时才构建；随包运行时的机器没有 npm，产物必须预先准备好 |
 | 启动 | 后端**同源托管**前端 `dist`，一个端口同时提供页面和 `/api`，没有跨域也没有反向代理 |
 | 强制离线 | `AI_MOCK=true` + 清空 Cloudinary 凭据 → AI 走本地规则、图片存本地磁盘，**全程零外网请求** |
 
 启动后访问 <http://localhost:3000>，演示账号见上一节。
 
-**停止**：在窗口里按 `Ctrl+C` 或直接关闭窗口即可自动清理。
+**停止**：在窗口里按 `Ctrl+C` 或直接关闭窗口即可自动清理（mysqld 在 Windows 上会派生子进程，
+脚本按数据目录匹配命令行，父子一并清理）。
 若窗口被强杀导致端口占用，运行 `stop-demo.bat`（只清理演示用的 node 与便携 mysqld，不碰本机 MySQL 服务）。
 
 **离线包完整性**（已验证）：
@@ -309,11 +344,16 @@ start-demo.bat -Reseed         :: 强制重灌演示数据
 - 构建产物中**无任何外部主机名**，`index.html` 无 CDN 引用
 - AI 搜索与 AI 流式对话在 `AI_MOCK=true` 下功能完整
 
-> **两个注意点**
-> 1. 便携数据库的数据目录固定在**纯 ASCII 路径**（`%LOCALAPPDATA%\smart-second-hand-demo`）。
->    这是踩过的坑：`datadir` 位于含中文的路径（如 `F:\二手app\...`）时，`mysqld --initialize` 会成功，
->    但随后启动静默失败（退出码 1、无日志），所以脚本会自动避开中文路径。
-> 2. 便携实例首次启动会初始化约 180 MB 的数据目录（几秒），之后复用；删除该目录即可完全重置。
+> **踩过的三个坑（脚本已自动规避）**
+> 1. **中文路径**：`datadir` / `basedir` 位于含中文的路径（如 `F:\二手app\...`）时，
+>    `mysqld --initialize` 会成功，但随后启动**静默失败**（退出码 1、无日志）。
+>    因此数据目录固定在 ASCII 路径 `%LOCALAPPDATA%\smart-second-hand-demo`；
+>    随包 MySQL 若位于中文路径，会先复制到该 ASCII 目录再使用（仅首次，约 95 MB）。
+> 2. **Windows 保留端口**：Hyper-V / WSL 会预留成段端口（如 3316-3415、3416-3515），
+>    这些端口看起来空闲但 mysqld 绑不上。脚本启动前读取 `netsh` 排除段跳过，
+>    并以「进程秒退就换端口重试」兜底。
+> 3. **mysqld 派生进程**：Windows 上 mysqld 会分裂成监控父进程 + 服务子进程，
+>    只停父进程会留下子进程占着端口。脚本按数据目录匹配命令行清理。
 
 > **安全说明**：便携实例使用 root 空密码，因此启动时强制 `--bind-address=127.0.0.1`，
 > 只监听本机回环，同网段的其他人无法连接（mysqld 默认监听 `0.0.0.0`，不显式限制会暴露在局域网中）。

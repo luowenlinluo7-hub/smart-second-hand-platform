@@ -58,6 +58,12 @@ if (-not $demoDir) { $demoDir = $demoCandidates[$demoCandidates.Count - 1] }
 $demoData = Join-Path $demoDir 'data'
 $demoDbName = 'smart_second_hand_demo'
 
+# 随包携带的便携运行时（由 scripts/demo/prepare-runtime.ps1 生成）。
+# 学校电脑可能既没装 Node 也没装 MySQL，这时全靠它。
+$runtimeDir = Join-Path $projectRoot 'runtime'
+$bundledNode = Join-Path $runtimeDir 'node.exe'
+$bundledMysqlBin = Join-Path $runtimeDir 'mysql\bin'
+
 $script:mysqldProc = $null
 $script:serverProc = $null
 
@@ -204,10 +210,18 @@ function Stop-Demo-Processes {
   if ($script:serverProc -and -not $script:serverProc.HasExited) {
     Stop-Process -Id $script:serverProc.Id -Force -ErrorAction SilentlyContinue
   }
-  if ($script:mysqldProc -and -not $script:mysqldProc.HasExited) {
-    Stop-Process -Id $script:mysqldProc.Id -Force -ErrorAction SilentlyContinue
-    Write-Note '便携数据库已停止'
+
+  # mysqld 在 Windows 上会派生一个子进程（父进程负责监控、子进程才是真正监听的服务），
+  # 只停父进程会把子进程留在后台。因此按「数据目录」匹配命令行，父子一并清理。
+  $killed = 0
+  $targets = Get-CimInstance Win32_Process -Filter "Name = 'mysqld.exe'" -ErrorAction SilentlyContinue
+  foreach ($proc in $targets) {
+    if ($proc.CommandLine -and $proc.CommandLine -like "*$demoData*") {
+      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+      $killed++
+    }
   }
+  if ($killed -gt 0) { Write-Note "便携数据库已停止（$killed 个进程）" }
 }
 
 # ---------- 主流程 ----------
@@ -218,9 +232,22 @@ function Start-Demo {
   Write-Note "项目目录：$projectRoot"
 
   Write-Step '检查运行环境'
-  $nodeCheck = Invoke-Native -Exe 'node' -Arguments @('-v')
-  if ($nodeCheck.ExitCode -ne 0) { throw '未找到 Node.js，请先安装 Node 20+' }
-  Write-Ok ("Node " + $nodeCheck.Output.Trim())
+  if (Test-Path $bundledNode) {
+    $nodeExe = $bundledNode
+    $nodeVer = Invoke-Native -Exe $nodeExe -Arguments @('-v')
+    if ($nodeVer.ExitCode -ne 0) { throw "随包的 node.exe 无法运行：$($nodeVer.Output)" }
+    Write-Ok ("Node " + $nodeVer.Output.Trim() + "（随包携带，无需安装）")
+  } else {
+    $nodeCheck = Invoke-Native -Exe 'node' -Arguments @('-v')
+    if ($nodeCheck.ExitCode -ne 0) {
+      throw '未找到 Node.js。请运行 scripts/demo/prepare-runtime.ps1 打包便携运行时，或在本机安装 Node 20+。'
+    }
+    $nodeExe = 'node'
+    Write-Ok ("Node " + $nodeCheck.Output.Trim())
+  }
+
+  # npm 只在「需要重新构建」时才用得上；随包运行时里没有 npm，因此构建产物必须预先准备好
+  $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
 
   foreach ($pair in @(@('client', (Join-Path $clientDir 'node_modules')), @('server', (Join-Path $serverDir 'node_modules')))) {
     if (-not (Test-Path $pair[1])) {
@@ -271,15 +298,46 @@ function Start-Demo {
     Write-Step '本机 MySQL 服务未运行，改用项目内便携实例（不需要管理员权限）'
     Write-Note "数据目录：$demoData"
 
-    $mysqldExe = Find-Mysqld
+    $mysqldExe = $null
+    $mysqlSource = ''
+    if (Test-Path (Join-Path $bundledMysqlBin 'mysqld.exe')) {
+      if ((Join-Path $runtimeDir 'mysql') -match $asciiPattern) {
+        $mysqldExe = Join-Path $bundledMysqlBin 'mysqld.exe'
+        $mysqlSource = '随包携带'
+      } else {
+        # 项目放在含中文的路径（如 F:\二手app\...）时，以该路径当 basedir 会让 mysqld
+        # 在启动阶段静默失败（退出码 1、无日志）。因此把随包 MySQL 复制到 ASCII 目录再用，
+        # 只复制一次，之后靠标记文件判断是否需要更新。
+        $mysqlCache = Join-Path $demoDir 'mysql'
+        $marker = Join-Path $mysqlCache '.source'
+        $srcInfo = Get-Item (Join-Path $bundledMysqlBin 'mysqld.exe')
+        $stamp = "$($srcInfo.Length)-$($srcInfo.LastWriteTimeUtc.Ticks)"
+        $needCopy = $true
+        if ((Test-Path (Join-Path $mysqlCache 'bin\mysqld.exe')) -and (Test-Path $marker)) {
+          if ((Get-Content $marker -Raw).Trim() -eq $stamp) { $needCopy = $false }
+        }
+        if ($needCopy) {
+          Write-Note '项目路径含中文，先把随包 MySQL 复制到 ASCII 目录（仅首次，约 95 MB）...'
+          if (Test-Path $mysqlCache) { Remove-Item -Recurse -Force $mysqlCache }
+          New-Item -ItemType Directory -Path $mysqlCache -Force | Out-Null
+          Copy-Item (Join-Path $runtimeDir 'mysql\*') $mysqlCache -Recurse -Force
+          [System.IO.File]::WriteAllText($marker, $stamp)
+        }
+        $mysqldExe = Join-Path $mysqlCache 'bin\mysqld.exe'
+        $mysqlSource = '随包携带（已复制到 ASCII 目录）'
+      }
+    } else {
+      $mysqldExe = Find-Mysqld
+      $mysqlSource = '本机安装'
+    }
     if (-not $mysqldExe) {
-      throw '未找到 mysqld.exe。请安装 MySQL 8，或手动启动 MySQL80 服务后重试。'
+      throw '未找到 mysqld.exe。请运行 scripts/demo/prepare-runtime.ps1 打包便携运行时，或在本机安装 MySQL 8 / 启动 MySQL80 服务。'
     }
     $mysqlBin = Split-Path $mysqldExe -Parent
     $mysqlBase = Split-Path $mysqlBin -Parent
     $mysqlAdmin = Join-Path $mysqlBin 'mysqladmin.exe'
     $mysqlCli = Join-Path $mysqlBin 'mysql.exe'
-    Write-Ok "MySQL 二进制：$mysqlBin"
+    Write-Ok "MySQL 二进制：$mysqlSource（$mysqlBin）"
 
     if (-not (Test-Path $demoDir)) { New-Item -ItemType Directory -Path $demoDir -Force | Out-Null }
 
@@ -369,11 +427,17 @@ function Start-Demo {
   }
 
   # ---------- 迁移与演示数据 ----------
+  # 不依赖 npm / npx：直接让 node 执行 Prisma CLI 与 tsx，
+  # 这样在「只带了便携 node.exe、没装 Node」的机器上也能跑。
+  $prismaCli = Join-Path $serverDir 'node_modules\prisma\build\index.js'
+  $tsxCli = Join-Path $serverDir 'node_modules\tsx\dist\cli.mjs'
+
   Write-Step '同步数据库结构'
   $env:DATABASE_URL = $dbUrl
+  if (-not (Test-Path $prismaCli)) { throw "缺少 Prisma CLI：$prismaCli（node_modules 不完整？）" }
   Push-Location $serverDir
   try {
-    $migrate = Invoke-Native -Exe 'cmd' -Arguments @('/c', 'npx prisma migrate deploy 2>&1')
+    $migrate = Invoke-Native -Exe $nodeExe -Arguments @($prismaCli, 'migrate', 'deploy')
   } finally {
     Pop-Location
   }
@@ -387,7 +451,7 @@ function Start-Demo {
   $countScript = "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.product.count().then(c=>{console.log(c);return p.`$disconnect()}).catch(()=>{console.log('-1')})"
   Push-Location $serverDir
   try {
-    $countResult = Invoke-Native -Exe 'node' -Arguments @('-e', $countScript)
+    $countResult = Invoke-Native -Exe $nodeExe -Arguments @('-e', $countScript)
   } finally {
     Pop-Location
   }
@@ -398,7 +462,17 @@ function Start-Demo {
 
   if ($Reseed -or $productCount -le 0) {
     Write-Note '正在灌入演示数据（约 10 秒）...'
-    Invoke-Npm -WorkDir $serverDir -Arguments 'run seed'
+    if (-not (Test-Path $tsxCli)) { throw "缺少 tsx：$tsxCli（node_modules 不完整？）" }
+    Push-Location $serverDir
+    try {
+      $seedResult = Invoke-Native -Exe $nodeExe -Arguments @($tsxCli, 'prisma\seed.ts')
+    } finally {
+      Pop-Location
+    }
+    if ($seedResult.ExitCode -ne 0) {
+      Write-Host $seedResult.Output -ForegroundColor DarkGray
+      throw '灌入演示数据失败'
+    }
     Write-Ok '演示数据准备完成'
   } else {
     Write-Ok "已有 $productCount 件商品，跳过灌数据（需要重置请加 -Reseed）"
@@ -409,6 +483,9 @@ function Start-Demo {
   $serverDist = Join-Path $serverDir 'dist'
 
   if ($Rebuild -or -not (Test-Path (Join-Path $clientDist 'index.html'))) {
+    if (-not $npmCmd) {
+      throw 'client/dist 缺失，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
+    }
     Write-Step '构建前端（约 10 秒）'
     Invoke-Npm -WorkDir $clientDir -Arguments 'run build'
     Write-Ok '前端构建完成'
@@ -417,6 +494,9 @@ function Start-Demo {
   }
 
   if ($Rebuild -or -not (Test-Path (Join-Path $serverDist 'index.js'))) {
+    if (-not $npmCmd) {
+      throw 'server/dist 缺失，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
+    }
     Write-Step '构建后端（约 5 秒）'
     Invoke-Npm -WorkDir $serverDir -Arguments 'run build'
     Write-Ok '后端构建完成'
@@ -440,7 +520,7 @@ function Start-Demo {
   $srvOut = Join-Path $demoDir 'server.out.log'
   $srvErr = Join-Path $demoDir 'server.err.log'
 
-  $script:serverProc = Start-Process -FilePath 'node' -ArgumentList 'dist/index.js' `
+  $script:serverProc = Start-Process -FilePath $nodeExe -ArgumentList 'dist/index.js' `
     -WorkingDirectory $serverDir -PassThru -WindowStyle Hidden `
     -RedirectStandardOutput $srvOut -RedirectStandardError $srvErr
 

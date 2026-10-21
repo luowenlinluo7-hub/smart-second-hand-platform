@@ -29,3 +29,6 @@ server/uploads/
 
 # 离线演示用的便携数据库（一键启动脚本自动创建）
 .demo-db/
+
+# 离线演示的便携运行时（node.exe + 精简 MySQL，约 183 MB，由 prepare-runtime.ps1 生成）
+runtime/
