@@ -115,8 +115,33 @@ function Test-Port {
   }
 }
 
+# Windows 会为 Hyper-V / WSL 预留成段端口（本机实测排除 3316-3415、3416-3515 等多段）。
+# 落在保留区内的端口「看起来没人监听，但 mysqld 绑不上」，必须先排除掉。
+function Get-ReservedPortRanges {
+  $ranges = @()
+  $res = Invoke-Native -Exe 'netsh' -Arguments @('int', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp')
+  foreach ($line in ($res.Output -split "`n")) {
+    if ($line -match '^\s*(\d{2,5})\s+(\d{2,5})\s*\*?\s*$') {
+      $ranges += , @([int]$Matches[1], [int]$Matches[2])
+    }
+  }
+  return $ranges
+}
+
+function Test-PortUsable {
+  param([int]$Port, $ReservedRanges)
+  if (Test-Port $Port) { return $false }
+  if ($ReservedRanges) {
+    foreach ($range in $ReservedRanges) {
+      if ($Port -ge $range[0] -and $Port -le $range[1]) { return $false }
+    }
+  }
+  return $true
+}
+
 function Wait-HttpOk {
   param([string]$Url, [int]$TimeoutSec = 60)
+
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
   while ((Get-Date) -lt $deadline) {
     try {
@@ -210,6 +235,12 @@ function Start-Demo {
   }
   Write-Ok 'server/.env 已存在'
 
+  # Windows 保留端口段（Hyper-V / WSL 会占掉成段端口），选端口时必须跳过
+  $reservedRanges = Get-ReservedPortRanges
+  if ($reservedRanges.Count -gt 0) {
+    Write-Note ("系统保留端口段：" + (($reservedRanges | ForEach-Object { "$($_[0])-$($_[1])" }) -join '、'))
+  }
+
   # 端口占用：先判断是不是本程序已经在跑
   while (Test-Port $Port) {
     if (Wait-HttpOk -Url "http://127.0.0.1:$Port/api/health" -TimeoutSec 2) {
@@ -219,6 +250,12 @@ function Start-Demo {
     }
     $Port++
     Write-Warn2 "端口被占用，改用 $Port"
+  }
+
+  # 再跳过系统保留段（这类端口没人监听，但绑不上）
+  while (-not (Test-PortUsable -Port $Port -ReservedRanges $reservedRanges)) {
+    $Port++
+    Write-Warn2 "端口落在系统保留区，改用 $Port"
   }
 
   # ---------- 数据库 ----------
@@ -278,23 +315,42 @@ function Start-Demo {
 
     if (-not $reused) {
       $dbPort = 3307
-      while (Test-Port $dbPort) { $dbPort++ }
+      while (-not (Test-PortUsable -Port $dbPort -ReservedRanges $reservedRanges)) { $dbPort++ }
       $dbLog = Join-Path $demoDir 'mysqld.log'
-      # 路径含空格，参数必须整体带引号传给 Start-Process
-      # 只监听本机回环：便携实例用 root 空密码，绝不能暴露到局域网
-      # （mysqld 默认 bind-address 是 *，即监听所有网卡）
-      $argStr = "--basedir=`"$mysqlBase`" --datadir=`"$demoData`" --port=$dbPort --bind-address=127.0.0.1 --skip-log-bin --log-error=`"$dbLog`""
-      $script:mysqldProc = Start-Process -FilePath $mysqldExe -ArgumentList $argStr -PassThru -WindowStyle Hidden
 
+      # Windows 会为 Hyper-V / WSL 保留成段的端口（本机实测排除 3316-3415、3416-3515 等），
+      # 落在保留区里的端口「看起来空闲、实际绑不上」。因此启动后若进程秒退就换下一个端口重试，
+      # 比预先解析 netsh 更简单，也能顺带覆盖其它偶发绑定失败。
       $ready = $false
-      for ($i = 0; $i -lt 180; $i++) {
-        Start-Sleep -Milliseconds 500
-        $ping = Invoke-Native -Exe $mysqlAdmin -Arguments @('-h', '127.0.0.1', '-P', "$dbPort", '-u', 'root', 'ping')
-        if ($ping.Output -match 'alive') { $ready = $true; break }
+      $maxAttempts = 8
+      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        # 路径含空格，参数必须整体带引号传给 Start-Process
+        # 只监听本机回环：便携实例用 root 空密码，绝不能暴露到局域网
+        # （mysqld 默认 bind-address 是 *，即监听所有网卡）
+        $argStr = "--basedir=`"$mysqlBase`" --datadir=`"$demoData`" --port=$dbPort --bind-address=127.0.0.1 --skip-log-bin --log-error=`"$dbLog`""
+        $script:mysqldProc = Start-Process -FilePath $mysqldExe -ArgumentList $argStr -PassThru -WindowStyle Hidden
+
+        for ($i = 0; $i -lt 60; $i++) {
+          Start-Sleep -Milliseconds 500
+          $ping = Invoke-Native -Exe $mysqlAdmin -Arguments @('-h', '127.0.0.1', '-P', "$dbPort", '-u', 'root', 'ping')
+          if ($ping.Output -match 'alive') { $ready = $true; break }
+          if ($script:mysqldProc.HasExited) { break }
+        }
+
+        if ($ready) { break }
+
+        # 进程已退出：多半是端口绑不上，换下一个候选端口
+        if ($attempt -lt $maxAttempts) {
+          $failedPort = $dbPort
+          $dbPort++
+          while (-not (Test-PortUsable -Port $dbPort -ReservedRanges $reservedRanges)) { $dbPort++ }
+          Write-Warn2 "端口 $failedPort 启动失败（可能被系统保留），改用 $dbPort 重试"
+        }
       }
+
       if (-not $ready) {
         if (Test-Path $dbLog) { Get-Content $dbLog -Tail 20 | ForEach-Object { Write-Note $_ } }
-        throw "便携 MySQL 未能在 90 秒内就绪（端口 $dbPort）"
+        throw "便携 MySQL 未能就绪（已尝试 $maxAttempts 个端口，最后一次为 $dbPort）"
       }
       Write-Ok "便携实例已就绪（端口 $dbPort）"
     }
