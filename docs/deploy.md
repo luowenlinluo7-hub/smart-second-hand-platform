@@ -230,7 +230,7 @@ pm2 restart smart-second-hand
   - `NODE_ENV=production`
   - `DATABASE_URL`（第 1 步拿到的云库地址）
   - `JWT_SECRET`
-  - `CORS_ORIGIN=https://smart-second-hand.vercel.app`
+  - `CORS_ORIGIN=https://smart-second-hand-platform.vercel.app`
   - `AI_MOCK=true`（或有 Key 时填 `DEEPSEEK_API_KEY`）
   - **图片存储**：`CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`
 - ⚠️ **为什么必须配 Cloudinary**：Railway 容器文件系统是临时的，重启即丢。
@@ -244,7 +244,7 @@ pm2 restart smart-second-hand
 
 - Import Project → **Root Directory** 选 `client`
 - Framework：**Vite**；Build：`npm run build`；Output：`dist`
-- 后端 `CORS_ORIGIN` 里填 Vercel 的域名：`https://smart-second-hand.vercel.app`
+- 后端 `CORS_ORIGIN` 里填 Vercel 的域名：`https://smart-second-hand-platform.vercel.app`
   （预览部署的 `<project>-<hash>-<scope>.vercel.app` 由后端代码里的正则自动放行，不用逐个加）
 - **关键：跨域怎么解决**
 
@@ -273,10 +273,13 @@ pm2 restart smart-second-hand
   > 另外 CORS 白名单与 rewrite 并不冲突：rewrite 让浏览器侧变成同源（更简单），
   > CORS 则保证「前端直连后端」这条路也能走（例如将来接移动端）。
 
-- 若你更想直连后端（直接跨域，不经过 Vercel 代理），把 `baseURL` 改成
-  `import.meta.env.VITE_API_BASE ?? '/api'`，同时改 `client/src/api/aiChat.ts` 里的
-  `fetch('/api/ai/chat')`，并在 Vercel 配 `VITE_API_BASE`。
-  后端已放行 `https://smart-second-hand.vercel.app` 与所有 `*.vercel.app` 预览域名。
+- 若你更想直连后端（直接跨域，不经过 Vercel 代理），**不需要改任何代码**：
+  在 Vercel 项目的 Environment Variables 里加
+  `VITE_API_BASE_URL = https://你的后端.up.railway.app`
+  （只填到域名，**不要带 `/api` 后缀，也不要带末尾斜杠**），然后重新 Deploy。
+  axios 实例（`client/src/api/request.ts`）与 SSE 的 `fetch`（`client/src/api/aiChat.ts`）
+  都已读取该变量并自动拼上 `/api`；Vite 只在构建时注入 `VITE_` 前缀的变量，所以改完必须重新部署。
+  后端已放行 `https://smart-second-hand-platform.vercel.app` 与本项目的 `*.vercel.app` 预览域名。
 
 ### 4. SSE 在 Vercel 代理下的注意事项
 
@@ -296,7 +299,7 @@ pm2 restart smart-second-hand
 验证方法（部署后直接对代理地址测）：
 
 ```bash
-curl -N -X POST https://smart-second-hand.vercel.app/api/ai/chat \
+curl -N -X POST https://smart-second-hand-platform.vercel.app/api/ai/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"2000 以内的游戏本"}'
 ```

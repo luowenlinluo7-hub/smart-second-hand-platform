@@ -1,11 +1,12 @@
 import axios, { type AxiosInstance } from 'axios'
 import type { ApiResponse } from '@/types/api'
 
-// 开发环境走 vite 代理（/api -> http://localhost:3000），因此这里用相对路径
-// 读取 Vercel 配置的环境变量；如果没有（本地开发），则回退到 '/api' 走 Vite 代理
-const baseURL = import.meta.env.VITE_API_BASE_URL 
-  ? `${import.meta.env.VITE_API_BASE_URL}/api` 
-  : '/api'
+// 后端地址（跨域部署时才配，如 Vercel 上的前端访问 Railway 后端）
+// 末尾斜杠统一剥掉，避免配成 https://api.example.com/ 时拼出 //api
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+
+// 本地开发不配该变量，走 vite 代理（/api -> http://localhost:3000）
+const baseURL = API_BASE_URL ? `${API_BASE_URL}/api` : '/api'
 
 const instance: AxiosInstance = axios.create({
   baseURL,

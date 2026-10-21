@@ -15,6 +15,8 @@
 一个前后端分离的全栈二手交易平台：**自然语言检索 + SSE 流式导购助手 + 真实聚合数据看板**，
 覆盖买家、卖家、管理员三种角色的完整交易闭环。
 
+🚀 **[在线体验](https://smart-second-hand-platform.vercel.app)**（`AI_MOCK` 演示模式，无需配置 Key）
+
 [功能一览](#功能一览) · [快速开始](#快速开始) · [离线演示](#没有-deepseek-key也能全功能演示) ·
 [架构设计](#系统架构) · [测试](#测试) · [部署](docs/deploy.md) · [API 契约](server/docs/api-contract.md)
 
@@ -246,6 +248,11 @@ cd client && npm run dev
 
 打开 <http://localhost:5173>，用下面的演示账号登录。
 
+> **前端不需要任何环境变量**：`client/vite.config.ts` 已把 `/api` 代理到 `http://localhost:3000`。
+> 只有**前端与后端不同域**时（如 Vercel 前端 + Railway 后端）才需要在 `client/.env.local`
+> 或 Vercel 的 Environment Variables 里配 `VITE_API_BASE_URL=https://你的后端域名`
+> （只填域名，不要带 `/api` 后缀或末尾斜杠；Vite 仅在构建时注入，改完需重新构建）。
+
 ### 5. 演示账号
 
 `npm run seed` 创建（密码均已 bcrypt 哈希入库）：
@@ -380,6 +387,8 @@ smart-second-hand-platform/
 
 - **单机云服务器**：PM2 + Nginx 反代 + HTTPS（Let's Encrypt）+ `/uploads` 持久化
 - **前后端分离托管**：Vercel（前端）+ Railway（后端 + MySQL）
+
+生产环境前端地址：<https://smart-second-hand-platform.vercel.app>（对应后端 `CORS_ORIGIN` 需放行该域名）
 
 逐步命令、Nginx 配置片段、环境变量清单与常见坑见 **[docs/deploy.md](docs/deploy.md)**。
 

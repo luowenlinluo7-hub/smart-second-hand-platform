@@ -1,7 +1,7 @@
 import type { Product } from '@/types/api'
 
-// 获取环境变量，如果本地没配则回退到空字符串（走 Vite 代理）
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+// 后端地址，与 request.ts 保持同一套拼接规则：末尾斜杠剥掉，本地不配则走 Vite 代理
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 
 // AI 助手的流式客户端
 //
@@ -151,8 +151,8 @@ export const streamAiChat = async (
 ): Promise<void> => {
   const token = localStorage.getItem('token')
 
-  // 👇 这里已经修改为拼接环境变量
-  const response = await fetch(`${API_BASE}/api/ai/chat`, {
+  // 与 axios 实例共用同一后端地址，本地未配变量时为空串，请求 /api/... 走 Vite 代理
+  const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
