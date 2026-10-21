@@ -265,9 +265,10 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-> **`npm run dev` 会自动处理数据库**：启动前探测 3306 —— 有 MySQL 就用 `server/.env`；
-> 没有就自动起一个便携实例（与 `start-demo.bat` 共用同一份数据），退出时再停掉。
-> 所以即使本机 MySQL 服务没启动，`npm run dev` 也能直接跑起来。
+> **数据库会自动准备**：无论你在**根目录**还是 **`server/` 目录**执行 `npm run dev`，
+> 都会先探测 3306 —— 有 MySQL 就用 `server/.env` 的配置；没有就自动起一个便携实例
+> （与 `start-demo.bat` 共用同一份数据），连接串通过环境变量注入后端，**不会改你的 `.env`**。
+> 停掉便携实例：`node scripts/ensure-db.mjs stop`。
 
 打开 <http://localhost:5173>，用下面的演示账号登录。
 
@@ -436,6 +437,7 @@ npm run test:e2e
 
 跑测试会自动创建测试数据并在结束时清理；想保留现场用 `E2E_KEEP_DATA=1 npm run test:e2e`。
 被测服务不在本地时用 `BASE_URL=https://your-api.example.com npm run test:e2e`。
+本地没配数据库时，`npm run test:e2e` 会自动准备（与 `npm run dev` 同一套逻辑）；CI 里由 workflow 注入 `DATABASE_URL`，不受影响。
 
 其他质量检查：
 
