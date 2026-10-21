@@ -358,10 +358,21 @@ const callDeepSeekStream = async (
   }
 };
 
-// 本地话术也分句推送，让前端无需特殊处理就能保持"逐句出现"的观感
-const emitLocalReply = (reply: string, sink: ChatSink): void => {
-  const sentences = reply.split(/(?<=[。！？])/).filter((item) => item.trim());
-  for (const sentence of sentences) sink.delta(sentence);
+// 本地话术的分片推送：
+// mock / 降级模式下没有模型流，若一次性把整段话写出去，前端就是"啪"地全出现，没有打字感。
+// 这里按小片段推送并留出间隔，让观感接近真实流式输出。
+const LOCAL_REPLY_CHUNK = 8;
+const LOCAL_REPLY_GAP_MS = 60;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const emitLocalReply = async (reply: string, sink: ChatSink, signal: AbortSignal): Promise<void> => {
+  const text = reply.trim();
+  for (let index = 0; index < text.length; index += LOCAL_REPLY_CHUNK) {
+    if (signal.aborted) return;
+    sink.delta(text.slice(index, index + LOCAL_REPLY_CHUNK));
+    if (index + LOCAL_REPLY_CHUNK < text.length) await sleep(LOCAL_REPLY_GAP_MS);
+  }
 };
 
 const streamReply = async (
@@ -373,11 +384,11 @@ const streamReply = async (
   const localReply = composeLocalReply(context, context.localFact ?? null);
 
   if (env.AI_MOCK) {
-    emitLocalReply(localReply, sink);
+    await emitLocalReply(localReply, sink, signal);
     return { source: 'mock', degraded: '当前为本地规则模式（AI_MOCK=true），回答由本地话术生成' };
   }
   if (!env.DEEPSEEK_API_KEY) {
-    emitLocalReply(localReply, sink);
+    await emitLocalReply(localReply, sink, signal);
     return { source: 'mock', degraded: '未配置 DEEPSEEK_API_KEY，回答由本地话术生成' };
   }
 
@@ -401,7 +412,7 @@ const streamReply = async (
 
     const reason = error instanceof Error ? error.message : String(error);
     // 已经吐了一部分内容时不再补本地话术，否则会出现两段重复回答
-    if (!emitted) emitLocalReply(localReply, sink);
+    if (!emitted) await emitLocalReply(localReply, sink, signal);
     return {
       source: 'fallback',
       degraded: `AI 回答不可用，已使用本地话术（${reason}）`,

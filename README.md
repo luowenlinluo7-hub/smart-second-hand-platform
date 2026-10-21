@@ -265,8 +265,9 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-> `npm run dev` 启动前会探测 3306：如果数据库没起来会直接给出提示（P1001 的根因），
-> 并列出三种处理方式。注意**根目录没有 MySQL 时后端虽然能启动，但业务接口会全部报错**。
+> **`npm run dev` 会自动处理数据库**：启动前探测 3306 —— 有 MySQL 就用 `server/.env`；
+> 没有就自动起一个便携实例（与 `start-demo.bat` 共用同一份数据），退出时再停掉。
+> 所以即使本机 MySQL 服务没启动，`npm run dev` 也能直接跑起来。
 
 打开 <http://localhost:5173>，用下面的演示账号登录。
 

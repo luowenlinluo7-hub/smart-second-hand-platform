@@ -205,6 +205,17 @@ function Invoke-Npm {
   }
 }
 
+# 源码比产物新就需要重建：否则改了代码再启动演示，跑的还是旧 dist（很难察觉）
+function Test-NeedsBuild {
+  param([string]$SrcDir, [string[]]$Patterns, [string]$OutputFile)
+  if (-not (Test-Path $OutputFile)) { return $true }
+  $outTime = (Get-Item $OutputFile).LastWriteTimeUtc
+  $newer = Get-ChildItem -Path $SrcDir -Recurse -File -Include $Patterns -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTimeUtc -gt $outTime } |
+    Select-Object -First 1
+  return [bool]$newer
+}
+
 # ---------- 清理 ----------
 
 function Stop-Demo-Processes {
@@ -490,26 +501,26 @@ function Start-Demo {
   $clientDist = Join-Path $clientDir 'dist'
   $serverDist = Join-Path $serverDir 'dist'
 
-  if ($Rebuild -or -not (Test-Path (Join-Path $clientDist 'index.html'))) {
+  if ($Rebuild -or (Test-NeedsBuild -SrcDir (Join-Path $clientDir 'src') -Patterns @('*.ts','*.vue','*.css') -OutputFile (Join-Path $clientDist 'index.html'))) {
     if (-not $npmCmd) {
-      throw 'client/dist 缺失，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
+      throw 'client/dist 缺失或已过期，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
     }
     Write-Step '构建前端（约 10 秒）'
     Invoke-Npm -WorkDir $clientDir -Arguments 'run build'
     Write-Ok '前端构建完成'
   } else {
-    Write-Ok '前端 dist 已存在，跳过构建'
+    Write-Ok '前端 dist 是最新的，跳过构建'
   }
 
-  if ($Rebuild -or -not (Test-Path (Join-Path $serverDist 'index.js'))) {
+  if ($Rebuild -or (Test-NeedsBuild -SrcDir (Join-Path $serverDir 'src') -Patterns @('*.ts') -OutputFile (Join-Path $serverDist 'index.js'))) {
     if (-not $npmCmd) {
-      throw 'server/dist 缺失，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
+      throw 'server/dist 缺失或已过期，但当前机器没有 npm 无法构建。请在有 Node 的开发机上重新打包（prepare-runtime.ps1 会顺带构建）。'
     }
     Write-Step '构建后端（约 5 秒）'
     Invoke-Npm -WorkDir $serverDir -Arguments 'run build'
     Write-Ok '后端构建完成'
   } else {
-    Write-Ok '后端 dist 已存在，跳过构建'
+    Write-Ok '后端 dist 是最新的，跳过构建'
   }
 
   # ---------- 启动 ----------
