@@ -61,14 +61,21 @@ function Test-Port {
 }
 
 function Stop-PortableMysql {
-  $killed = 0
-  Get-CimInstance Win32_Process -Filter "Name = 'mysqld.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
-    if ($_.CommandLine -and $_.CommandLine -like "*$demoData*") {
-      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-      $killed++
+  # mysqld 在 Windows 上是「监控父进程 + 服务子进程」，父进程被杀时子进程可能刚被派生出来，
+  # 单轮枚举会漏。这里做两轮，中间留一点时间让进程树稳定。
+  $total = 0
+  for ($pass = 1; $pass -le 2; $pass++) {
+    $killed = 0
+    Get-CimInstance Win32_Process -Filter "Name = 'mysqld.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+      if ($_.CommandLine -and $_.CommandLine -like "*$demoData*") {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        $killed++
+      }
     }
+    $total += $killed
+    if ($pass -eq 1) { Start-Sleep -Milliseconds 700 }
   }
-  return $killed
+  return $total
 }
 
 function Get-EnvValue {

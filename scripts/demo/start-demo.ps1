@@ -228,14 +228,18 @@ function Stop-Demo-Processes {
   }
 
   # mysqld 在 Windows 上会派生一个子进程（父进程负责监控、子进程才是真正监听的服务），
-  # 只停父进程会把子进程留在后台。因此按「数据目录」匹配命令行，父子一并清理。
+  # 只停父进程会把子进程留在后台；而且父进程被杀时子进程可能刚派生出来。
+  # 因此按数据目录匹配命令行，清理两轮。
   $killed = 0
-  $targets = Get-CimInstance Win32_Process -Filter "Name = 'mysqld.exe'" -ErrorAction SilentlyContinue
-  foreach ($proc in $targets) {
-    if ($proc.CommandLine -and $proc.CommandLine -like "*$demoData*") {
-      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-      $killed++
+  for ($pass = 1; $pass -le 2; $pass++) {
+    $targets = Get-CimInstance Win32_Process -Filter "Name = 'mysqld.exe'" -ErrorAction SilentlyContinue
+    foreach ($proc in $targets) {
+      if ($proc.CommandLine -and $proc.CommandLine -like "*$demoData*") {
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        $killed++
+      }
     }
+    if ($pass -eq 1) { Start-Sleep -Milliseconds 700 }
   }
   if ($killed -gt 0) { Write-Note "便携数据库已停止（$killed 个进程）" }
 }
