@@ -6,7 +6,8 @@
 // searchWithRelaxation 同时被 /api/ai/search 与 /api/ai/chat 复用，
 // 保证两条入口的检索行为完全一致。
 
-import { parseQuery, type ParseSource, type ParsedFilters } from './ai.service';
+import { parseQuery, isEmptyFilters, type ParseSource, type ParsedFilters } from './ai.service';
+import { expandKeywordVariants } from './searchSynonyms';
 import {
   searchProductsRanked,
   type RankedSearchQuery,
@@ -38,6 +39,8 @@ export const RELAX_STEPS: readonly RelaxStep[] = [
 export interface RelaxSearchParams {
   filters: ParsedFilters;
   keyword: string;
+  // keyword 的等价写法（品牌别名展开后），为空时退化为 [keyword]
+  keywords?: string[];
   page: number;
   pageSize: number;
   excludeIds?: string[];
@@ -50,9 +53,12 @@ export interface RelaxSearchResult extends RankedSearchResult {
 
 // 按阶梯某一步的开关组装查询条件
 const buildQuery = (params: RelaxSearchParams, step: RelaxStep): RankedSearchQuery => {
-  const { filters, keyword, page, pageSize, excludeIds } = params;
+  const { filters, keyword, keywords, page, pageSize, excludeIds } = params;
   return {
     keyword,
+    // 即使是空数组也要显式传下去：空数组表示「关键词全是填充词，不参与过滤」，
+    // 若省略则 product.service 会回退到 keyword，把无意义的原串当成检索条件
+    keywords: keywords ?? [],
     page,
     pageSize,
     ...(excludeIds && excludeIds.length > 0 ? { excludeIds } : {}),
@@ -105,13 +111,19 @@ export interface AiSearchInput {
 export const searchByAi = async (input: AiSearchInput): Promise<AiSearchResult> => {
   const outcome = await parseQuery(input.query);
 
-  // 一个条件都没解析出来时，退回用原句当关键词，
-  // 避免查询条件全空导致返回全量商品
-  const keyword = outcome.filters.keyword || input.query.trim();
+  // 只有在「一个条件都没解析出来」时才退回原句当关键词。
+  // 早期版本写成 filters.keyword || input.query，导致「两千以内」这类只有价格条件的
+  // 查询把整句话当成关键词去匹配标题，必然 0 结果 —— 这是纯条件查询失效的根因。
+  const rawKeyword = isEmptyFilters(outcome.filters) ? input.query.trim() : outcome.filters.keyword;
+  const keywords = expandKeywordVariants(rawKeyword, outcome.filters.category?.name ?? null);
+  // 展开后为空说明关键词全是「有什么」这类填充词，此时不能再用原串兜底，
+  // 否则会带着一个无意义的关键词去检索，把条件查询又变成 0 结果
+  const keyword = keywords.length > 0 ? rawKeyword : '';
 
   const result = await searchWithRelaxation({
     filters: outcome.filters,
     keyword,
+    keywords,
     page: input.page,
     pageSize: input.pageSize,
   });

@@ -143,15 +143,25 @@ const heatBonus = (product: RankableProduct): number => {
   return Math.min(Math.round(raw * 10) / 10, MAX_HEAT_BONUS);
 };
 
+// 关键词可以是一组等价写法（如「苹果手机」展开成 苹果手机 / iphone）。
+// 组内是「任一命中即相关」，取各写法得分的最大值，避免重复加分把无关商品抬上来。
+export type KeywordInput = string | readonly string[];
+
+const toKeywordList = (keyword: KeywordInput): string[] => {
+  const list = typeof keyword === 'string' ? [keyword] : [...keyword];
+  return [...new Set(list.map((item) => item.trim()).filter(Boolean))];
+};
+
 // 打分并排序。返回结果已过滤掉零分项（零分 = 与该关键词无关）
 export const rankProducts = <T extends RankableProduct>(
   items: T[],
-  keyword: string,
+  keyword: KeywordInput,
 ): RankedProduct<T>[] => {
-  const tokens = tokenizeKeyword(keyword);
+  const keywordList = toKeywordList(keyword);
+  const tokenList = keywordList.map((item) => tokenizeKeyword(item)).filter((item) => item.phrase);
 
   // 没有关键词时不打分，直接按热度 + 时间给出稳定顺序
-  if (!tokens.phrase) {
+  if (tokenList.length === 0) {
     return [...items]
       .sort(
         (a, b) =>
@@ -164,7 +174,8 @@ export const rankProducts = <T extends RankableProduct>(
 
   return items
     .map((product) => {
-      const base = scoreProduct(product, tokens);
+      // 多个等价写法取最高分：命中任意一种都算相关，但不叠加
+      const base = Math.max(...tokenList.map((tokens) => scoreProduct(product, tokens)));
       // 热度只在已经相关的前提下加分，避免把无关商品抬上来
       const score = base > 0 ? Math.round((base + heatBonus(product)) * 10) / 10 : 0;
       return { product, score };
@@ -180,15 +191,18 @@ export const rankProducts = <T extends RankableProduct>(
 
 // 粗筛条件：只要候选里有「可能相关」的行即可，精确性交给打分。
 // 拉丁词这里仍用 contains（可能多召回 Air 之类），随后会被打分淘汰。
-export const buildCandidateWhere = (keyword: string): Prisma.ProductWhereInput | null => {
-  const tokens = tokenizeKeyword(keyword);
-  if (!tokens.phrase) return null;
-
-  const needles = [...new Set([...tokens.latin, ...tokens.cjk, ...tokens.bigrams])];
-  if (needles.length === 0) return null;
+// 传入多个等价写法时，各组条件之间是 OR 关系。
+export const buildCandidateWhere = (keyword: KeywordInput): Prisma.ProductWhereInput | null => {
+  const needles = new Set<string>();
+  for (const item of toKeywordList(keyword)) {
+    const tokens = tokenizeKeyword(item);
+    if (!tokens.phrase) continue;
+    for (const needle of [...tokens.latin, ...tokens.cjk, ...tokens.bigrams]) needles.add(needle);
+  }
+  if (needles.size === 0) return null;
 
   return {
-    OR: needles.flatMap((needle) => [
+    OR: [...needles].flatMap((needle) => [
       { title: { contains: needle } },
       { description: { contains: needle } },
     ]),

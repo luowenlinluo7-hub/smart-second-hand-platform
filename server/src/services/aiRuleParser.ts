@@ -125,24 +125,86 @@ const matchConditionText = (text: string): string | null => {
   return matched ? matched[0].replace(/\s+/g, '') : null;
 };
 
+// 中文数词 → 数字：规则解析必须能读懂「两千以内」「一千五左右」这类说法，
+// 否则离线演示（AI_MOCK）下纯价格查询会解析不出任何条件。
+const CN_PRICE_DIGITS: Record<string, number> = {
+  零: 0,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+};
+const CN_PRICE_UNITS: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
+
+const parseCnNumber = (raw: string): number | null => {
+  const text = raw.trim();
+  if (!text) return null;
+  if (/^[0-9]+(\.[0-9]+)?$/.test(text)) return Number(text);
+
+  let total = 0;
+  let section = 0;
+  let current = 0;
+  let lastUnit = 0;
+
+  for (const char of text) {
+    if (char in CN_PRICE_DIGITS) {
+      current = CN_PRICE_DIGITS[char];
+      continue;
+    }
+    if (char in CN_PRICE_UNITS) {
+      const unit = CN_PRICE_UNITS[char];
+      section += (current === 0 ? 1 : current) * unit;
+      current = 0;
+      lastUnit = unit;
+      continue;
+    }
+    if (char === '万') {
+      section = (section + current) * 10000;
+      total += section;
+      section = 0;
+      current = 0;
+      lastUnit = 10000;
+      continue;
+    }
+    return null;
+  }
+
+  // 结尾的裸数字跟随上一个单位降一级：「一千五」= 1500、「两千五」= 2500
+  if (current > 0) {
+    section += lastUnit >= 100 ? current * (lastUnit / 10) : current;
+  }
+  const value = total + section;
+  return Number.isFinite(value) ? value : null;
+};
+
 // 价格短语：上限表达
 const PRICE_MAX_PATTERNS: readonly RegExp[] = [
   /(\d+(?:\.\d+)?)\s*(?:元|块|rmb)?\s*(?:以内|以下|之内|以里|左右|上下|不超过|最多|封顶)/i,
   /(?:不超过|最多|不高于|预算)\s*(?:在)?\s*(\d+(?:\.\d+)?)/i,
+  /([零一二两三四五六七八九十百千万]+)\s*(?:元|块)?\s*(?:以内|以下|之内|以里|左右|上下|不超过|最多|封顶)/,
+  /(?:不超过|最多|不高于|预算)\s*(?:在)?\s*([零一二两三四五六七八九十百千万]+)/,
 ];
 
 // 价格短语：下限表达
 const PRICE_MIN_PATTERNS: readonly RegExp[] = [
   /(\d+(?:\.\d+)?)\s*(?:元|块|rmb)?\s*(?:以上|起|往上|起步)/i,
   /(?:至少|不低于|高于|超过)\s*(\d+(?:\.\d+)?)/i,
+  /([零一二两三四五六七八九十百千万]+)\s*(?:元|块)?\s*(?:以上|起|往上|起步)/,
+  /(?:至少|不低于|高于|超过)\s*([零一二两三四五六七八九十百千万]+)/,
 ];
 
 const firstPrice = (text: string, patterns: readonly RegExp[]): number | null => {
   for (const pattern of patterns) {
     const matched = pattern.exec(text);
     if (matched) {
-      const value = Number(matched[1]);
-      if (Number.isFinite(value) && value >= 0) return Math.round(value * 100) / 100;
+      const value = parseCnNumber(matched[1]);
+      if (value !== null && value >= 0) return Math.round(value * 100) / 100;
     }
   }
   return null;
@@ -152,6 +214,9 @@ const firstPrice = (text: string, patterns: readonly RegExp[]): number | null =>
 const PRICE_STRIP_PATTERNS: readonly RegExp[] = [
   /\d+(?:\.\d+)?\s*(?:元|块|rmb)?\s*(?:以内|以下|之内|以里|左右|上下|不超过|最多|封顶|以上|起|往上|起步)/gi,
   /(?:不超过|最多|不高于|预算|至少|不低于|高于|超过)\s*(?:在)?\s*\d+(?:\.\d+)?/gi,
+  // 中文数词的价格短语（「两千以内」「一千五左右」）
+  /[零一二两三四五六七八九十百千万]+\s*(?:元|块)?\s*(?:以内|以下|之内|以里|左右|上下|不超过|最多|封顶|以上|起|往上|起步)/g,
+  /(?:不超过|最多|不高于|预算|至少|不低于|高于|超过)\s*(?:在)?\s*[零一二两三四五六七八九十百千万]+/g,
   /[¥￥]/g,
 ];
 

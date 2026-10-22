@@ -3,6 +3,7 @@ import * as echarts from 'echarts'
 import type { ECharts, EChartsOption } from 'echarts'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { BRAND_THEME_NAME, createBrandTheme } from '@/utils/echartsTheme'
+import { prefersReducedMotion } from '@/utils/motion'
 
 const props = defineProps<{
   option: EChartsOption
@@ -21,11 +22,16 @@ const ensureTheme = (): void => {
   themeRegistered = true
 }
 
+// 无障碍：系统开启「减少动态效果」时彻底关掉动画。
+// 主题在启动时只注册一次，改不了；这里每次设置 option 都覆盖一次更可靠。
+const withMotionPreference = (option: EChartsOption): EChartsOption =>
+  prefersReducedMotion() ? { ...option, animation: false } : option
+
 onMounted(() => {
   if (!container.value) return
   ensureTheme()
   chart = echarts.init(container.value, BRAND_THEME_NAME)
-  chart.setOption(props.option)
+  chart.setOption(withMotionPreference(props.option))
 
   // 用 ResizeObserver 而不是 window.resize：
   // 抽屉展开、侧栏折叠、栅格重排等「窗口没变但容器变了」的场景也必须重绘
@@ -41,7 +47,7 @@ onMounted(() => {
 watch(
   () => props.option,
   (option) => {
-    chart?.setOption(option)
+    chart?.setOption(withMotionPreference(option))
   },
   { deep: true },
 )

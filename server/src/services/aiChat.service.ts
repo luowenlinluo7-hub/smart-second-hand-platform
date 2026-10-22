@@ -12,6 +12,7 @@
 import { CONDITION_LABELS } from './aiRuleParser';
 import { parseQuery, isEmptyFilters, type ParsedFilters, type ParseSource } from './ai.service';
 import { searchWithRelaxation } from './aiSearch.service';
+import { expandKeywordVariants } from './searchSynonyms';
 import {
   averagePriceOfCategory,
   findProductById,
@@ -502,9 +503,14 @@ export const runChat = async (
     total = items.length;
   } else {
     sink.thought('正在商品库中按相关性检索…');
+    // 与 /api/ai/search 保持同一套规则：只有条件全空时才用原句当关键词，
+    // 否则「2000 以内」这种纯价格查询会被整句话当成关键词而 0 命中
+    const rawKeyword = isEmptyFilters(filters) ? message : filters.keyword;
+    const keywords = expandKeywordVariants(rawKeyword, filters.category?.name ?? null);
     const result = await searchWithRelaxation({
       filters,
-      keyword: filters.keyword || message,
+      keyword: keywords.length > 0 ? rawKeyword : '',
+      keywords,
       page: 1,
       pageSize: CHAT_PRODUCT_LIMIT,
       excludeIds,

@@ -130,6 +130,9 @@ export const listProducts = async (query: ProductListQuery): Promise<ProductList
 export interface RankedSearchQuery extends ProductListQuery {
   // 需要排除的商品（如已推荐过的，避免反复推同一件）
   excludeIds?: string[];
+  // 关键词的等价写法（见 searchSynonyms.expandKeywordVariants）。
+  // 传了就用它做「任一命中即相关」，未传则退化为单个 keyword。
+  keywords?: string[];
 }
 
 export interface RankedSearchResult extends ProductListResult {
@@ -158,7 +161,12 @@ export const searchProductsRanked = async (
     where.id = { notIn: query.excludeIds };
   }
 
-  const keywordWhere = query.keyword ? buildCandidateWhere(query.keyword) : null;
+  // 关键词可以是多个等价写法（品牌中文名展开成英文型号等）。
+  // keywords 显式为 [] 表示「不按关键词过滤」，必须与「未传」区分开，
+  // 否则会回退到 keyword（可能是一个无意义的填充词）而把结果清空。
+  const keywordInput =
+    query.keywords !== undefined ? query.keywords : (query.keyword ?? '');
+  const keywordWhere = buildCandidateWhere(keywordInput);
   if (keywordWhere) {
     // 用 AND 包住关键词 OR 组，避免和外层条件互相覆盖
     where.AND = [keywordWhere];
@@ -171,8 +179,14 @@ export const searchProductsRanked = async (
     take: CANDIDATE_LIMIT,
   });
 
-  const ranked = rankProducts(candidates, query.keyword ?? '');
+  const ranked = rankProducts(candidates, keywordInput);
   const list = ranked.map((item) => formatProduct(item.product));
+
+  // 「弱结果」只用来衡量关键词相关性。纯条件查询（如「两千以内」）没有关键词，
+  // 命中就是精确的条件匹配，不该被判成弱结果 —— 否则 AI 会误说「符合度不算高」。
+  const hasKeyword = Array.isArray(keywordInput)
+    ? keywordInput.some((item) => item.trim().length > 0)
+    : keywordInput.trim().length > 0;
 
   // 候选集已在内存里排好序，直接切片即可
   const start = (query.page - 1) * query.pageSize;
@@ -181,7 +195,7 @@ export const searchProductsRanked = async (
     total: list.length,
     page: query.page,
     pageSize: query.pageSize,
-    weak: isWeakResult(ranked),
+    weak: hasKeyword ? isWeakResult(ranked) : false,
   };
 };
 

@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { getDashboard } from '@/api/admin'
 import { DataLine } from '@element-plus/icons-vue'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { useCountUp } from '@/composables/useCountUp'
 import type { DashboardData } from '@/types/api'
 
 const router = useRouter()
@@ -52,13 +53,49 @@ const isEmptyStatus = computed(
 const isEmptyCategory = computed(() => (data.value?.categoryShare.length ?? 0) === 0)
 const isEmptyTop = computed(() => (data.value?.topProducts.length ?? 0) === 0)
 
+// KPI 数字滚动：数据到位后从 0 递增到目标值。
+// 用 computed 取目标值，再交给 useCountUp 做插值，模板只读动画值。
+const kpiUserTarget = computed(() => data.value?.kpi.userCount ?? null)
+const kpiProductTarget = computed(() => data.value?.kpi.productCount ?? null)
+const kpiOrderTarget = computed(() => data.value?.kpi.orderCount ?? null)
+const kpiGmvTarget = computed(() => (data.value ? Number(data.value.kpi.gmv) : null))
+
+const animatedUser = useCountUp(kpiUserTarget)
+const animatedProduct = useCountUp(kpiProductTarget)
+const animatedOrder = useCountUp(kpiOrderTarget)
+// GMV 带两位小数，滚动时也保持两位，避免数字长度跳动
+const animatedGmv = useCountUp(kpiGmvTarget, { decimals: 2 })
+
 const kpiCards = computed(() => {
-  const kpi = data.value?.kpi
   return [
-    { key: 'user', label: '总用户数', value: kpi ? String(kpi.userCount) : '—', icon: User, suffix: '人' },
-    { key: 'product', label: '总商品数', value: kpi ? String(kpi.productCount) : '—', icon: Goods, suffix: '件' },
-    { key: 'order', label: '总订单数', value: kpi ? String(kpi.orderCount) : '—', icon: List, suffix: '笔' },
-    { key: 'gmv', label: '总成交额（GMV）', value: kpi ? money(kpi.gmv) : '—', icon: Money, suffix: '元' },
+    {
+      key: 'user',
+      label: '总用户数',
+      value: animatedUser.value === null ? '—' : String(animatedUser.value),
+      icon: User,
+      suffix: '人',
+    },
+    {
+      key: 'product',
+      label: '总商品数',
+      value: animatedProduct.value === null ? '—' : String(animatedProduct.value),
+      icon: Goods,
+      suffix: '件',
+    },
+    {
+      key: 'order',
+      label: '总订单数',
+      value: animatedOrder.value === null ? '—' : String(animatedOrder.value),
+      icon: List,
+      suffix: '笔',
+    },
+    {
+      key: 'gmv',
+      label: '总成交额（GMV）',
+      value: animatedGmv.value === null ? '—' : money(animatedGmv.value),
+      icon: Money,
+      suffix: '元',
+    },
   ]
 })
 

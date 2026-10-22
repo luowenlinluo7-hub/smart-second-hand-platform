@@ -43,6 +43,15 @@ export const createBrandTheme = (): Record<string, unknown> => {
     // 透明底，让卡片自身的暖白透出来，避免图表区出现一块白色矩形
     backgroundColor: 'transparent',
 
+    // ---------- 入场动画 ----------
+    // 默认值是 1000ms 线性缓动，看起来"平移"过去没有质感；
+    // 这里统一改成 cubicOut 收尾更稳，并按数据下标做阶梯延迟，
+    // 让柱状 / 饼图的各个分片依次出现，而不是整块同时弹出。
+    // 无障碍降级在 EChart.vue 里做（那里能感知 prefers-reduced-motion 的变化）。
+    animationDuration: 800,
+    animationEasing: 'cubicOut',
+    animationDelay: (idx: number): number => idx * 50,
+
     textStyle: {
       fontFamily,
       color: textRegular,
