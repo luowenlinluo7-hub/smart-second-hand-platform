@@ -245,6 +245,18 @@ pm2 restart smart-second-hand
 
 - Import Project → **Root Directory** 选 `client`
 - Framework：**Vite**；Build：`npm run build`；Output：`dist`
+- **必须有 `client/vercel.json` 的 SPA 回退**（仓库里已提供）：
+
+  ```json
+  {
+    "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  }
+  ```
+
+  > 没有它，只有 `/` 能打开；直接访问或**刷新** `/orders`、`/dashboard` 这类路由会返回
+  > Vercel 的 `404 NOT_FOUND` 页（因为是静态托管，服务器上并不存在这些路径）。
+  > 移动端演示时随手刷新一下就白屏，属于必配项。
+  > 同理，Netlify 需要在 `client/public/_redirects` 写 `/*  /index.html  200`。
 - 后端 `CORS_ORIGIN` 里填 Vercel 的域名：`https://smart-second-hand-platform.vercel.app`
   （预览部署的 `<project>-<hash>-<scope>.vercel.app` 由后端代码里的正则自动放行，不用逐个加）
 - **关键：跨域怎么解决**
@@ -263,11 +275,18 @@ pm2 restart smart-second-hand
       {
         "source": "/uploads/:path*",
         "destination": "https://你的后端.up.railway.app/uploads/:path*"
+      },
+      {
+        "source": "/((?!api/|uploads/).*)",
+        "destination": "/index.html"
       }
     ]
   }
   ```
 
+  > 最后一条不能省：`rewrites` 是整体替换的，只写前两条会把 SPA 回退覆盖掉，
+  > 非首页路由又会 404。
+  >
   > 只在**本地驱动**下才需要第二条 `/uploads` rewrite；
   > 用 Cloudinary 时图片是绝对地址，直接由 `res.cloudinary.com` 提供，可以删掉。
   >
