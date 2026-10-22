@@ -51,6 +51,11 @@ $asciiPattern = '^[\x20-\x7E]+$'
 $demoCandidates = @()
 if ($env:LOCALAPPDATA) { $demoCandidates += (Join-Path $env:LOCALAPPDATA 'smart-second-hand-demo') }
 if ($env:TEMP) { $demoCandidates += (Join-Path $env:TEMP 'smart-second-hand-demo') }
+# 兜底：机房电脑常用中文用户名，此时 LOCALAPPDATA 与 TEMP 都含中文，项目目录也可能
+# 放在 D:\作业\... 这类中文路径下。Users\Public 与 ProgramData 永远是纯 ASCII，
+# 且 Public 对所有用户可写，不需要管理员权限。
+if ($env:PUBLIC) { $demoCandidates += (Join-Path $env:PUBLIC 'smart-second-hand-demo') }
+if ($env:ProgramData) { $demoCandidates += (Join-Path $env:ProgramData 'smart-second-hand-demo') }
 $demoCandidates += (Join-Path $projectRoot '.demo-db')
 $demoDir = $demoCandidates | Where-Object { $_ -match $asciiPattern } | Select-Object -First 1
 if (-not $demoDir) { $demoDir = $demoCandidates[$demoCandidates.Count - 1] }

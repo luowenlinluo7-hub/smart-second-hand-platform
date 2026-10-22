@@ -327,6 +327,23 @@ powershell -ExecutionPolicy Bypass -File scripts\demo\prepare-runtime.ps1
 打包完成后把**整个项目文件夹**拷到 U 盘即可。启动器会自动优先使用 `runtime/` 里的运行时，
 完全不依赖目标机器的 PATH。
 
+### 便携数据库的数据目录放哪
+
+MySQL for Windows 在**含中文的路径**下会静默启动失败（`--initialize` 成功但随后退出码 1、无日志），
+所以演示库的数据目录按下面的顺序挑第一个**纯 ASCII** 的：
+
+| 顺序 | 位置 | 说明 |
+| --- | --- | --- |
+| 1 | `%LOCALAPPDATA%\smart-second-hand-demo` | 常规情况（用户名是英文时） |
+| 2 | `%TEMP%\smart-second-hand-demo` | 1 不可用时的备选 |
+| 3 | `C:\Users\Public\smart-second-hand-demo` | **用户名是中文时落到这里**（Public 恒为 ASCII 且对普通用户可写） |
+| 4 | `C:\ProgramData\smart-second-hand-demo` | 3 也不可用时 |
+| 5 | `<项目目录>\.demo-db` | 最后的兜底（项目路径也不含中文时可用） |
+
+> 机房电脑经常用中文用户名（如 `C:\Users\张三`），此时前两项都含中文，会自动切到
+> `C:\Users\Public`。启动时会打印实际使用的数据目录，一眼就能确认。
+> 想换位置/重来一遍：删掉对应目录（或运行 `stop-demo.bat` 后再删），下次启动会自动重新初始化。
+
 **拷贝清单**（缺一不可）：
 
 ```
