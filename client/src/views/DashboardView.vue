@@ -20,6 +20,9 @@ const data = ref<DashboardData | null>(null)
 // 首屏骨架屏：与 v-loading 一起用，避免图表容器出现跳动
 const firstLoad = ref(true)
 const days = ref(7)
+// 趋势图的图例选中状态（true/缺失 = 可见）。图例点击后用于同步隐藏对应数值轴，
+// 否则被关掉的那条轴会残留一个没有刻度的轴名，移动端看着像「左边的数字不见了」。
+const legendSelected = ref<Record<string, boolean>>({})
 
 // 金额统一按两位小数展示
 const money = (value: string | number): string => Number(value).toFixed(2)
@@ -113,6 +116,14 @@ const paidRatio = computed(() => {
 // GMV 趋势：金额走左轴，订单量走右轴
 const trendOption = computed<EChartsOption>(() => {
   const trend = data.value?.trend
+  const gmv = (trend?.gmv ?? []).map((v) => Number(v))
+  const orderCount = trend?.orderCount ?? []
+  // 系列被图例关掉时，对应数值轴整条一起隐藏。
+  // 只关系列、留着轴的话，ECharts 会因为该轴上没有可见 series 而把**整列刻度数字**
+  // 抹掉（只剩轴名孤零零挂在画布边），同时 containLabel 重算网格会把 X 轴首尾
+  // 标签挤出画布 —— 用户看到的就是「左边的数字不见了」。
+  const showGmvAxis = legendSelected.value['成交额'] !== false
+  const showOrderAxis = legendSelected.value['订单量'] !== false
   return {
     tooltip: {
       trigger: 'axis',
@@ -134,8 +145,11 @@ const trendOption = computed<EChartsOption>(() => {
     },
     // 图例居中：左右轴名分别贴在画布两侧，居中才不会与它们挤在一起
     legend: { data: ['成交额', '订单量'], top: 0, left: 'center' },
-    // top 留出图例与轴名的空间，避免轴名压到图例或数据线
-    grid: { left: 12, right: 12, top: 64, bottom: 8, containLabel: true },
+    // top 留出图例与轴名的空间，避免轴名压到图例或数据线。
+    // left/right 给到 32 是兜底：boundaryGap:false 时首尾数据点贴着网格边缘，
+    // 标签居中就会溢出画布（左轴的「10-16」被裁成「0-16」）。正常显示双轴时
+    // containLabel 算出的边距远大于 32，所以这个值只在某条轴被图例关掉后才起作用。
+    grid: { left: 32, right: 32, top: 64, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category',
       boundaryGap: false,
@@ -149,6 +163,7 @@ const trendOption = computed<EChartsOption>(() => {
         name: '成交额(元)',
         nameGap: 16,
         nameTextStyle: { align: 'left', padding: [0, 0, 0, -8] },
+        show: showGmvAxis,
       },
       {
         type: 'value',
@@ -157,6 +172,7 @@ const trendOption = computed<EChartsOption>(() => {
         minInterval: 1,
         nameGap: 16,
         nameTextStyle: { align: 'right', padding: [0, -8, 0, 0] },
+        show: showOrderAxis,
       },
     ],
     series: [
@@ -167,7 +183,7 @@ const trendOption = computed<EChartsOption>(() => {
         symbolSize: 6,
         yAxisIndex: 0,
         areaStyle: { opacity: 0.12 },
-        data: (trend?.gmv ?? []).map((v) => Number(v)),
+        data: gmv,
       },
       {
         name: '订单量',
@@ -175,11 +191,16 @@ const trendOption = computed<EChartsOption>(() => {
         smooth: true,
         symbolSize: 6,
         yAxisIndex: 1,
-        data: trend?.orderCount ?? [],
+        data: orderCount,
       },
     ],
   }
 })
+
+// 图例点击后同步选中状态，驱动上面的 yAxis.show
+const onTrendLegendChange = (selected: Record<string, boolean>): void => {
+  legendSelected.value = { ...selected }
+}
 
 const statusOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: 'item', formatter: '{b}: {c} 笔 ({d}%)' },
@@ -352,7 +373,12 @@ onMounted(fetchData)
       <el-card v-loading="loading" shadow="never" class="chart-card">
         <template #header><span class="chart-title">成交额与订单量趋势</span></template>
         <EmptyState v-if="isEmptyTrend" :icon="DataLine" title="该时间段暂无订单" compact />
-        <EChart v-else :option="trendOption" height="var(--chart-h-lg)" />
+        <EChart
+          v-else
+          :option="trendOption"
+          height="var(--chart-h-lg)"
+          @legend-change="onTrendLegendChange"
+        />
       </el-card>
 
       <el-row :gutter="16">

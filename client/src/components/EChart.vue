@@ -10,6 +10,12 @@ const props = defineProps<{
   height?: string
 }>()
 
+// 把图例点击结果抛给父组件：双轴图里某条线被关掉后，父组件需要把对应数值轴一起隐藏，
+// 否则 ECharts 会丢掉那条轴的全部刻度数字（只剩轴名），还会把 X 轴标签挤出画布。
+const emit = defineEmits<{
+  legendChange: [selected: Record<string, boolean>]
+}>()
+
 const container = ref<HTMLDivElement | null>(null)
 let chart: ECharts | null = null
 let observer: ResizeObserver | null = null
@@ -32,6 +38,11 @@ onMounted(() => {
   ensureTheme()
   chart = echarts.init(container.value, BRAND_THEME_NAME)
   chart.setOption(withMotionPreference(props.option))
+
+  chart.on('legendselectchanged', (params) => {
+    const selected = (params as { selected?: Record<string, boolean> }).selected
+    if (selected) emit('legendChange', selected)
+  })
 
   // 用 ResizeObserver 而不是 window.resize：
   // 抽屉展开、侧栏折叠、栅格重排等「窗口没变但容器变了」的场景也必须重绘
