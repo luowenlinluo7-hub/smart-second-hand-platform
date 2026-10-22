@@ -15,7 +15,7 @@ const authStore = useAuthStore()
 const cartStore = useCartStore()
 const aiChatStore = useAiChatStore()
 const router = useRouter()
-const { isMobile } = useIsMobile()
+const { isMobile } = useIsMobile('(max-width: 1023px)')
 
 // 购物车与 AI 会话都按用户隔离存储：登录 / 退出 / 切换账号时同步切换归属，
 // 避免换账号后仍看到上一个账号的购物车和聊天记录（甚至用新账号替别人下单）。
@@ -189,6 +189,9 @@ const handleLogout = (): void => {
   gap: var(--space-2);
   /* 允许子项收缩：否则品牌 + nav 的 nowrap 内容会把 header 撑出屏幕 */
   min-width: 0;
+  /* 左右内边距跟随主内容，保证 header 里的图标与下方卡片同一条竖线，
+     不再用 Element Plus 默认的 20px（会比卡片多缩进 12px，看起来「没对上」） */
+  padding: 0 var(--main-padding);
   background: var(--el-bg-color-overlay);
   border-bottom: 1px solid var(--el-border-color-light);
 }
@@ -201,7 +204,6 @@ const handleLogout = (): void => {
   flex: 0 0 auto;
   width: var(--tap-target);
   height: var(--tap-target);
-  margin-left: calc(var(--space-1) * -1);
   padding: 0;
   border: none;
   border-radius: var(--el-border-radius-base);
@@ -280,6 +282,10 @@ const handleLogout = (): void => {
   align-items: center;
   flex: 0 0 auto;
   gap: var(--space-1);
+  /* 关键：桌面端由 .nav 的 flex:1 撑开空间，但移动端 .nav 被 v-if 移除后
+     没有任何元素吸收剩余空间，.right 会紧跟品牌后面，右侧空出一大块。
+     margin-left:auto 让操作区始终贴右侧，与下方内容右边缘对齐。 */
+  margin-left: auto;
 }
 
 /* 主内容区内边距走 token，移动端由 theme.css 的 --main-padding 收窄 */
@@ -352,6 +358,25 @@ const handleLogout = (): void => {
 .menu-role {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+/* ---------- 紧凑布局（含平板）：与 App.vue 里 useIsMobile 的 1023px 断点一致 ---------- */
+@media (max-width: 1023px) {
+  /* 窄屏收紧横向间距，把空间让给品牌名和操作区 */
+  .header {
+    gap: var(--space-1);
+  }
+
+  /* 图标在 44px 按钮内居中，因此按钮本身要左移半个差值，
+     才能让「图标」的视觉左边缘与下方卡片左边缘落到同一条竖线上 */
+  .nav-toggle {
+    margin-left: calc((var(--tap-target) - 20px) / -2);
+  }
+
+  /* 头像右边缘与卡片右边缘对齐（去掉触发器的右侧内边距） */
+  .user-trigger {
+    padding-right: 0;
+  }
 }
 
 /* ---------- 移动端 ---------- */

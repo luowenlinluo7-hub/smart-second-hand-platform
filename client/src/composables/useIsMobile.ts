@@ -10,14 +10,17 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 // 所以这里的 767 与各组件 <style> 里的 @media 必须保持一致。
 const MOBILE_QUERY = '(max-width: 767px)'
 
-export const useIsMobile = () => {
+// 传自定义查询串可覆盖默认断点。布局外壳（App.vue 的导航栏）用更宽的断点：
+// 768~1023px 的平板宽度放不下 6 个横向导航项，会挤成「我」这种被裁的半截字，
+// 因此这一区间也改用汉堡菜单 + 抽屉。
+export const useIsMobile = (query: string = MOBILE_QUERY) => {
   const isMobile = ref(false)
   let mediaQuery: MediaQueryList | null = null
   let onChange: ((event: MediaQueryListEvent) => void) | null = null
 
   onMounted(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    mediaQuery = window.matchMedia(MOBILE_QUERY)
+    mediaQuery = window.matchMedia(query)
     isMobile.value = mediaQuery.matches
 
     onChange = (event) => {
