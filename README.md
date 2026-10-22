@@ -197,7 +197,7 @@ erDiagram
 
 ### 0. 前置要求
 
-- **Node.js ≥ 20**
+- **Node.js ≥ 20**（开发与测试基线：**v24.22.1 LTS**）
 - **MySQL 8.0+**（或用下面的 Docker 一行起库）
 - 可选：Docker（推荐，省去装 MySQL）
 

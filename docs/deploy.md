@@ -46,7 +46,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 # Ubuntu 22.04 为例
 sudo apt update
 sudo apt install -y nginx git
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node 20 已 EOL，这里用 24 LTS（与开发/测试环境一致：v24.22.1）
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 sudo npm i -g pm2
 ```

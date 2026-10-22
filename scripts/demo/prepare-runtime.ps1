@@ -18,7 +18,9 @@
 #>
 [CmdletBinding()]
 param(
-  [switch]$Force
+  [switch]$Force,
+  # 指定要打包的 node.exe；默认取 PATH 里的。系统 Node 还没升级时，可用它指向新版，避免被打回旧版。
+  [string]$NodeExe
 )
 
 $ErrorActionPreference = 'Continue'
@@ -53,6 +55,10 @@ function Invoke-Native {
 }
 
 function Find-NodeExe {
+  if ($NodeExe) {
+    if (Test-Path $NodeExe) { return (Resolve-Path $NodeExe).Path }
+    throw "指定的 -NodeExe 不存在：$NodeExe"
+  }
   $cmd = Get-Command node.exe -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
   foreach ($p in @("$env:ProgramFiles\nodejs\node.exe", "${env:ProgramFiles(x86)}\nodejs\node.exe")) {
