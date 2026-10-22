@@ -481,6 +481,7 @@ smart-second-hand-platform/
 ├── scripts/dev.mjs             根目录 npm run dev 的并行启动器（零依赖）
 ├── docs/
 │   ├── deploy.md               部署手册（PM2+Nginx / Vercel+Railway）
+│   ├── audit-2026-10-22.md     答辩前全项目审计报告（含实测与修复记录）
 │   ├── known-issues.md         已知问题与修复方向
 │   └── screenshots/            README 截图（WebP）
 ├── docker-compose.yml          一键起 MySQL

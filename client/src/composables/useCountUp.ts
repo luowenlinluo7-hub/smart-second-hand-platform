@@ -47,7 +47,10 @@ export const useCountUp = (
     const start = performance.now()
 
     const step = (now: number): void => {
-      const progress = Math.min((now - start) / duration, 1)
+      // 必须同时钳制上下限：requestAnimationFrame 回调拿到的是**该帧开始时刻**，
+      // 可能早于这里记录的 start（watcher 在帧中途触发），此时 (now - start) 为负，
+      // easeOutCubic 会得到一个很大的负值，数字会瞬间跳到 -2 / -2231 这类负值上。
+      const progress = Math.min(Math.max((now - start) / duration, 0), 1)
       display.value = round(from + (to - from) * easeOutCubic(progress))
       if (progress < 1) frame = requestAnimationFrame(step)
     }

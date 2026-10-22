@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { parseQuery } from '../services/ai.service';
 import { searchByAi } from '../services/aiSearch.service';
 import { runChat } from '../services/aiChat.service';
+import { toClientMessage } from '../middleware/errorHandler';
 import { BizCode, success } from '../utils/response';
 
 const querySchema = z
@@ -142,7 +143,8 @@ export const chat = async (req: Request, res: Response): Promise<void> => {
     if (!controller.signal.aborted) {
       send('error', {
         code: BizCode.SERVER_ERROR,
-        message: error instanceof Error ? error.message : '服务暂时不可用',
+        // 统一脱敏：避免把 Prisma 调用栈与服务器绝对路径直接推给前端
+        message: toClientMessage(error),
       });
     }
   } finally {

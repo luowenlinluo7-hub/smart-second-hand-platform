@@ -187,7 +187,11 @@ const describeConditions = (filters: ParsedFilters): string[] => {
   else if (filters.condition) parts.push(`成色=${CONDITION_LABELS[filters.condition]}`);
   if (filters.priceMin !== null) parts.push(`价格≥${filters.priceMin}`);
   if (filters.priceMax !== null) parts.push(`价格≤${filters.priceMax}`);
-  if (filters.keyword) parts.push(`关键词=${filters.keyword}`);
+  // 只展示「真正参与检索」的关键词：像「还有别 推荐」这种残句会被检索层丢弃，
+  // 若仍然展示出来，用户会看到「已识别条件：关键词=还有别 推荐」这种莫名其妙的内容
+  if (filters.keyword && expandKeywordVariants(filters.keyword, filters.category?.name ?? null).length > 0) {
+    parts.push(`关键词=${filters.keyword}`);
+  }
   return parts;
 };
 

@@ -29,6 +29,14 @@ const STOP_WORDS: readonly string[] = [
   '找一下',
   '看看',
   '看一下',
+  '还有',
+  '别的',
+  '其他',
+  '其它',
+  '换成',
+  '换',
+  '只',
+  '看',
   '有什么',
   '有啥',
   '什么',
@@ -149,6 +157,22 @@ export const stripStopWords = (text: string): string => {
   return result.replace(/\s+/g, ' ').trim();
 };
 
+// 纯品类词：只用于「选分类」，不适合当关键词去匹配标题。
+// 库里没有一件商品标题写「手机」「电脑」，拿它们去 LIKE 必然 0 命中，
+// 而分类条件已经把范围圈好了 —— 继续当关键词就会把结果清空。
+// 注意：只收录确定属于「分类同义」的词；游戏本 / 笔记本 / 显示器这类
+// 既是品类也是真实产品词的，仍然要留作关键词。
+const CATEGORY_ONLY_WORDS: readonly string[] = [
+  '手机数码',
+  '电脑办公',
+  '家用电器',
+  '手机',
+  '电脑',
+  '数码',
+  '家电',
+  '电器',
+];
+
 /** 从关键词与分类名推断商品大类 */
 const detectScope = (keyword: string, categoryName: string | null): Scope | null => {
   const pool = `${keyword} ${categoryName ?? ''}`.toLowerCase();
@@ -176,24 +200,45 @@ export const expandKeywordVariants = (
   const base = stripStopWords(keyword);
   if (!base) return [];
 
+  // 剥完停用词只剩单字残片（如「还有别的推荐吗」→「别」）时没有任何检索价值。
+  // 这类残句当成「无关键词」，交给分类/价格等结构化条件去筛，而不是拿它把结果清空。
+  const meaningful = /[a-z0-9]{2,}/i.test(base) || /[\u4e00-\u9fa5]{2,}/.test(base);
+  if (!meaningful) return [];
+
   const variants = new Set<string>([base]);
   const lower = base.toLowerCase();
   const scope = detectScope(base, categoryName);
 
+  let brandMatched = false;
+
   // 品牌展开
   for (const [brand, table] of Object.entries(BRAND_ALIASES)) {
     if (!lower.includes(brand.toLowerCase())) continue;
+    brandMatched = true;
     const scoped = scope ? table[scope] : undefined;
     const terms = scoped ?? table.all ?? [];
     for (const term of terms) variants.add(term);
   }
 
   // 品类展开
+  let productAliasMatched = false;
   for (const key of PRODUCT_KEYS_SORTED) {
     if (!lower.includes(key.toLowerCase())) continue;
+    productAliasMatched = true;
     for (const term of PRODUCT_ALIASES[key]) variants.add(term);
     // 命中最长的那个品类词就够了，避免「耳机」再叠一层
     break;
+  }
+
+  // 只剩下纯品类词（如「电脑」「换成手机数码看看」）：没有可检索的产品词，
+  // 这时应该只按分类过滤，而不是拿品类词去匹配标题导致 0 结果。
+  // 分类也为空时保持原行为，避免「只说了个品类、解析又没给出分类」时退化成返回全量。
+  if (!brandMatched && !productAliasMatched && categoryName) {
+    let residual = lower;
+    for (const word of CATEGORY_ONLY_WORDS) {
+      residual = residual.split(word.toLowerCase()).join(' ');
+    }
+    if (!residual.replace(/\s+/g, '')) return [];
   }
 
   return [...variants];
