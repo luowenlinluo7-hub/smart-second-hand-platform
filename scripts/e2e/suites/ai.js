@@ -251,6 +251,75 @@ const run = async () => {
     }
   });
 
+  // ---------- 意图短路与议价（v1.3.2）----------
+  await test('寒暄短路：不回商品、不查库，直接给话术', async () => {
+    const res = await readSse({ message: '你好' });
+    assert.http({ http: res.http }, 200, '寒暄 SSE 握手');
+
+    const names = res.events.map((e) => e.event);
+    assert.ok(names.includes('delta'), '寒暄应推送 delta（话术正文）');
+    // 关键：不发 products。前端会用它的 parsed 覆盖上一轮筛选条件，
+    // 寒暄发一个空 products 会把用户刚搜过的条件弄丢
+    assert.ok(!names.includes('products'), '寒暄不应推送 products 事件');
+    assert.ok(names.includes('done'), '寒暄应以 done 收尾');
+
+    const text = res.events
+      .filter((e) => e.event === 'delta')
+      .map((e) => e.data.text || '')
+      .join('');
+    assert.ok(text.length > 0, '寒暄应有正文内容');
+  });
+
+  await test('售后短路：引导用户去订单页，而不是答「没有找到商品」', async () => {
+    const res = await readSse({ message: '我要退货' });
+    assert.http({ http: res.http }, 200, '售后 SSE 握手');
+
+    const names = res.events.map((e) => e.event);
+    assert.ok(!names.includes('products'), '售后问题不应推送商品');
+
+    const text = res.events
+      .filter((e) => e.event === 'delta')
+      .map((e) => e.data.text || '')
+      .join('');
+    assert.ok(text.includes('订单'), `售后话术应指引到订单页，实际：「${text.slice(0, 80)}」`);
+  });
+
+  await test('议价不涨价：只推当前价 80% 以内的更便宜商品', async () => {
+    // 取最贵的在售商品当「当前关注商品」，保证一定能找到更便宜的，用例才稳定
+    const list = await api.get('/api/products?page=1&pageSize=50');
+    assert.equal(list.body?.code, 0, '商品列表可用');
+    const items = list.body.data.list;
+    assert.ok(items.length >= 2, '演示库在售商品应不少于 2 件');
+
+    const mostExpensive = items.reduce((max, item) =>
+      Number(item.price) > Number(max.price) ? item : max,
+    );
+    const originPrice = Number(mostExpensive.price);
+
+    const res = await readSse({
+      message: '太贵了',
+      context: { focusProductId: mostExpensive.id },
+    });
+    assert.http({ http: res.http }, 200, '议价 SSE 握手');
+
+    const products = res.events.filter((e) => e.event === 'products').pop();
+    assert.ok(products, '议价应推送 products 事件（更便宜的替代品）');
+    assert.ok(products.data.items.length > 0, '议价应至少找到 1 件更便宜的商品');
+
+    const ceiling = Math.floor(originPrice * 0.8);
+    for (const item of products.data.items) {
+      assert.ok(
+        Number(item.price) <= ceiling,
+        `议价结果必须 ≤ ¥${ceiling}（当前价 ¥${originPrice} 的 80%），` +
+          `但「${item.title}」为 ¥${item.price}`,
+      );
+    }
+    assert.ok(
+      !products.data.items.some((item) => item.id === mostExpensive.id),
+      '议价结果不应包含「被嫌贵的那件」本身',
+    );
+  });
+
   await test('SSE 空 message 返回 400 普通信封（不进入流式）', async () => {
     const res = await api.post('/api/ai/chat', { body: { message: '   ' } });
     assert.biz(res, codes.PARAM_ERROR, 400, 'SSE 空 message');

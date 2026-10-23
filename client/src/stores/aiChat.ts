@@ -169,6 +169,10 @@ export const useAiChatStore = defineStore('aiChat', () => {
         target.productsTotal = event.total
         target.relaxedNote = event.relaxedNote
         if (event.parsed) target.parsed = event.parsed
+        // 搜索结果的第一件自动成为「当前关注商品」。
+        // 后端只有在拿到 focusProductId 时才会启用「这件多少钱 / 成色怎么样 / 能便宜点吗」
+        // 这类追问规则；原来只有商品详情页会设置它，导致在首页聊天时这些问法全部失效。
+        if (event.items.length > 0) focusProductId.value = event.items[0].id
         break
       case 'delta':
         target.content += event.text
