@@ -320,6 +320,31 @@ const run = async () => {
     );
   });
 
+  await test('新查询不受「已展示商品」影响（exclude 只对追问生效）', async () => {
+    // 前端会把整段对话里出现过的商品累积进 excludeProductIds。
+    // 若对每个新查询都排除，商品少的库里聊几轮之后就必然 0 结果 ——
+    // 明明库里有 iPhone，用户再问「有没有苹果手机」却被告知没有。
+    const list = await api.get('/api/products?page=1&pageSize=50');
+    assert.equal(list.body?.code, 0, '商品列表可用');
+    const appleIds = list.body.data.list
+      .filter((p) => /iPhone|苹果|iPad|Mac|AirPods/i.test(p.title))
+      .map((p) => p.id);
+    assert.ok(appleIds.length > 0, '演示库应有苹果相关商品');
+
+    const res = await readSse({
+      message: '有没有苹果手机',
+      context: { excludeProductIds: appleIds },
+    });
+    assert.http({ http: res.http }, 200, 'SSE 握手');
+
+    const products = res.events.filter((e) => e.event === 'products').pop();
+    assert.ok(products, '应推送 products 事件');
+    assert.ok(
+      products.data.items.length > 0,
+      `新查询不应被历史已展示商品排除干净（传了 ${appleIds.length} 个 exclude id）`,
+    );
+  });
+
   await test('SSE 空 message 返回 400 普通信封（不进入流式）', async () => {
     const res = await api.post('/api/ai/chat', { body: { message: '   ' } });
     assert.biz(res, codes.PARAM_ERROR, 400, 'SSE 空 message');

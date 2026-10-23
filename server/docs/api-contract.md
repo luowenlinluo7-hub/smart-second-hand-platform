@@ -427,11 +427,15 @@ JSON.stringify(price)   // "1899"
   ],
   "context": {
     "focusProductId": "seed-prod-11",            // 用户当前关注的商品
-    "excludeProductIds": ["seed-prod-11"],       // 已推荐过的，避免重复
+    "excludeProductIds": ["seed-prod-11"],       // 已推荐过的，避免重复（**仅对追问生效**）
     "previousFilters": { /* 上一轮的 parsed，原样回传即可 */ }
   }
 }
 ```
+
+> `excludeProductIds` 只在「还有别的吗 / 再推荐一批」这类**追问**里生效。
+> 新查询（如「有没有苹果手机」）会忽略它 —— 前端会把整段对话出现过的商品全部累积到这里，
+> 若对每个查询都排除，商品少的库里聊过几轮之后必然 0 结果，明明有货却说「没有找到符合条件的商品」。
 
 **响应：SSE 事件流**（`Content-Type: text/event-stream`）
 
@@ -492,9 +496,7 @@ JSON.stringify(price)   // "1899"
 > 这里不使用逐级放宽（`searchWithRelaxation`）：它的阶梯会丢掉价格条件，
 > 一旦丢掉就可能又推出更贵的商品。
 
-**`focusProductId` 的维护方式**
-
-后端只在拿到 `focusProductId` 时才会启用「这件多少钱 / 成色怎么样 / 卖家还卖什么 / 能便宜点吗」
+**`focusProductId` 的维护方式**后端只在拿到 `focusProductId` 时才会启用「这件多少钱 / 成色怎么样 / 卖家还卖什么 / 能便宜点吗」
 这类追问规则。前端在两种时机写入：
 
 - 进入商品详情页（离开时置空）；

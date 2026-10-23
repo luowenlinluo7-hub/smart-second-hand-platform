@@ -518,7 +518,13 @@ export const runChat = async (
   const startedAt = Date.now();
   const message = input.message.trim();
   const context = input.context ?? {};
-  const excludeIds = context.excludeProductIds ?? [];
+
+  // 「已展示过」只对「还有别的吗」这类追问生效。
+  // 前端会把整段对话里出现过的商品全部累积进 excludeProductIds；
+  // 若对每个新查询都排除，商品少的库里聊过几轮之后就必然 0 结果——
+  // 明明库里有 iPhone，用户再问「有没有苹果手机」却被告知「没有找到符合条件的商品」。
+  const isFollowUp = FOLLOW_UP_PATTERN.test(message);
+  const excludeIds = isFollowUp ? (context.excludeProductIds ?? []) : [];
 
   // ⓪ 寒暄 / 售后：不查库、不解析条件，直接回话术。
   // 刻意**不发 products 事件** —— 前端会用它的 parsed 覆盖上一轮筛选条件，
@@ -557,7 +563,6 @@ export const runChat = async (
     // 细节类提问沿用上一轮条件即可，没有就用空条件
     filters = context.previousFilters ?? EMPTY_FILTERS;
   } else {
-    const isFollowUp = FOLLOW_UP_PATTERN.test(message);
     // 追问句用本地规则解析就够了（「1500 以内的」「换成手机」都能识别），
     // 省掉一次模型调用，也避免因为句子里没有商品词而白白降级
     const fresh = await parseQuery(message, { preferLocal: isFollowUp });
