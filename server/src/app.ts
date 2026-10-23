@@ -63,6 +63,12 @@ export const createApp = (): Express => {
 
   app.disable('x-powered-by');
 
+  // 线上位于 Railway 反向代理之后：信任 1 层代理，req.ip 才是真实客户端 IP，
+  // 登录 / 注册限流才会按用户分别计数，而不是所有人共用代理 IP 的一个计数。
+  if (env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   // 安全响应头。指令按本项目的实际资源定制，不能直接用 helmet 默认值：
   // 1) style-src 需要 'unsafe-inline'：Element Plus 大量使用内联 style 属性
   // 2) img-src 需要 data: / blob:：头像占位与 ECharts 导出会用到；
