@@ -69,10 +69,13 @@
 - **口语检索归一化**：检索层统一做停用词过滤与品牌/品类别名展开（苹果手机 → iPhone、降噪耳机 → AirPods），
   中文数词价格也认（「两千以内」「一千五左右」）。因为放在检索层，真实模型与本地规则两条路径同时受益。
 - **SSE 流式导购**：思考过程 → 商品卡 → 文字回答三段式推送，首字超时与整体超时都可配；停止生成会真正掐断上游调用，不继续计费。
+- **对话式追问**：搜完即可接着问「这件成色怎么样 / 还能便宜点吗 / 卖家还卖什么」——
+  服务端按当前关注商品走意图规则，不靠模型猜指代；说「太贵了」会按当前价的 80% 找更便宜的同类，
+  寒暄与售后问题直接给出对应话术，不会被当成搜索词去查库。
 - **看板全部真实聚合**：用户数 / 订单状态分组 / 销量 Top5 / 近 N 天 GMV 趋势（原生 SQL 按天聚合 + 时区对齐），金额全用 `Decimal` 不丢精度。
 - **统一响应信封**：所有接口返回 `{ code, message, data }`，前端拦截器统一处理 401/403/429。
 - **上传安全**：MIME→扩展名映射（不信任用户文件名）+ `nosniff` + `CSP sandbox`，杜绝「图片头伪装成 HTML」的同源脚本执行。
-- **可测性**：84 条**零依赖**端到端用例（Node 内置 `fetch`，不引 Jest/Supertest），CI 里跑真实 MySQL。
+- **可测性**：88 条**零依赖**端到端用例（Node 内置 `fetch`，不引 Jest/Supertest），CI 里跑真实 MySQL。
 
 ---
 
@@ -316,11 +319,11 @@ start-demo.bat -Reseed         :: 强制重灌演示数据
 powershell -ExecutionPolicy Bypass -File scripts\demo\prepare-runtime.ps1
 ```
 
-它会在项目根目录生成 `runtime/`（约 183 MB，已加入 `.gitignore`，不进仓库）：
+它会在项目根目录生成 `runtime/`（约 186 MB，已加入 `.gitignore`，不进仓库）：
 
 | 内容 | 体积 | 说明 |
 | --- | --- | --- |
-| `runtime/node.exe` | 88 MB | 便携 Node，直接运行无需安装、无需管理员权限 |
+| `runtime/node.exe` | 90 MB | 便携 Node，直接运行无需安装、无需管理员权限 |
 | `runtime/mysql/` | 95 MB | 精简 MySQL：`mysqld`/`mysql`/`mysqladmin` + 15 个依赖 DLL + `share`（错误信息与字符集） |
 | `runtime/vcruntime140*.dll` 等 | < 1 MB | VC++ 运行库，防目标机器缺失 |
 
@@ -422,7 +425,7 @@ AI_MOCK=true
 | 费用 | 0，且**完全离线可用**（答辩现场断网也能演示） |
 
 同一套降级链路在「模型超时 / 返回无法解析」时也会自动生效（`source=fallback`），
-所以线上不会因为第三方抖动而白屏。本项目的 CI 就是用 `AI_MOCK=true` 跑通全部 84 条用例的。
+所以线上不会因为第三方抖动而白屏。本项目的 CI 就是用 `AI_MOCK=true` 跑通全部 88 条用例的。
 
 > 想要真实模型效果：申请 [DeepSeek](https://platform.deepseek.com/) Key 填入 `DEEPSEEK_API_KEY`，把 `AI_MOCK` 设为 `false`。
 > Key 只在后端使用，前端代码与构建产物中不会出现。
@@ -431,7 +434,7 @@ AI_MOCK=true
 
 ## 测试
 
-零依赖端到端测试（Node 内置 `fetch`，不需要 Jest / Supertest），共 **84 条用例**，
+零依赖端到端测试（Node 内置 `fetch`，不需要 Jest / Supertest），共 **88 条用例**，
 打真实 HTTP 接口 + 真实 MySQL：
 
 ```bash
@@ -443,7 +446,7 @@ cd ..
 npm run test:e2e
 ```
 
-当前结果：**84 通过 / 0 失败 / 2 跳过**（跳过项需要真实模型输出，`AI_MOCK` 下不适用）。
+当前结果：**88 通过 / 0 失败 / 2 跳过**（跳过项需要真实模型输出，`AI_MOCK` 下不适用）。
 
 | Suite | 覆盖内容 |
 | --- | --- |
@@ -451,7 +454,7 @@ npm run test:e2e
 | 1. 用户模块 | 注册（重复邮箱 409 / 弱密码 400）、登录（错密码 / 未知账号 401）、`/me` 鉴权、改资料、**改密码后旧密码失效新密码可用** |
 | 2. 商品模块 | USER 发布 403 → SELLER 发布 `PENDING_REVIEW` → 审核通过上架 → `viewCount` 自增 → 编辑权限 → 下架 → 重新上架；分页 / 价格 / 分类参数校验；**图片上传（返回可用 URL + 当前驱动、非图片拒绝、未登录 401）** |
 | 3. 订单模块 | 下单（商品转 `SOLD`）→ 付款 → 发货 → 收货 → 评价；重复下单 409、越权流转 403、非参与方 403、取消订单回滚商品、**评价落库核对** |
-| 4. AI 模块 | `/parse`、`/search` 结构契约（`source ∈ {ai, mock, fallback}`、只返回在售）、检索相关性、SSE `/chat` 事件协议与三阶段管线顺序 |
+| 4. AI 模块 | `/parse`、`/search` 结构契约（`source ∈ {ai, mock, fallback}`、只返回在售）、检索相关性、SSE `/chat` 事件协议与三阶段管线顺序、**寒暄/售后短路**、**议价只推更便宜的**、**新查询不受历史已展示商品影响** |
 | 5. 管理员看板 | 401 / 403 权限边界、六大区块结构、金额精度、趋势数组长度与日期窗口、状态分布口径一致性 |
 
 跑测试会自动创建测试数据并在结束时清理；想保留现场用 `E2E_KEEP_DATA=1 npm run test:e2e`。
@@ -493,7 +496,7 @@ smart-second-hand-platform/
 │       ├── routes/             路由表
 │       ├── services/           业务逻辑（订单状态机、AI、看板聚合…）
 │       └── utils/              统一响应、JWT、密码、上传安全
-├── scripts/e2e/                零依赖端到端测试（84 条）
+├── scripts/e2e/                零依赖端到端测试（88 条）
 ├── scripts/demo/               离线演示一键启动 / 停止脚本
 ├── scripts/dev.mjs             根目录 npm run dev 的并行启动器（零依赖）
 ├── docs/
