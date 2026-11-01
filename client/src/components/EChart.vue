@@ -20,6 +20,10 @@ const container = ref<HTMLDivElement | null>(null)
 let chart: ECharts | null = null
 let observer: ResizeObserver | null = null
 let themeRegistered = false
+// 记录已知尺寸：ResizeObserver 注册后会立即回调一次，若此时尺寸未变就跳过 resize，
+// 否则会把刚刚启动的入场动画直接快进到终态（折线绘制动画只剩几十毫秒）
+let lastWidth = 0
+let lastHeight = 0
 
 // 主题必须在 init 之前注册，且只需注册一次
 const ensureTheme = (): void => {
@@ -36,6 +40,10 @@ const withMotionPreference = (option: EChartsOption): EChartsOption =>
 onMounted(() => {
   if (!container.value) return
   ensureTheme()
+  const rect = container.value.getBoundingClientRect()
+  lastWidth = Math.round(rect.width)
+  lastHeight = Math.round(rect.height)
+
   chart = echarts.init(container.value, BRAND_THEME_NAME)
   chart.setOption(withMotionPreference(props.option))
 
@@ -47,8 +55,16 @@ onMounted(() => {
   // 用 ResizeObserver 而不是 window.resize：
   // 抽屉展开、侧栏折叠、栅格重排等「窗口没变但容器变了」的场景也必须重绘
   if (typeof ResizeObserver !== 'undefined') {
-    observer = new ResizeObserver(() => {
-      chart?.resize()
+    observer = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1]?.contentRect
+      if (!box) return
+      const width = Math.round(box.width)
+      const height = Math.round(box.height)
+      if (width === lastWidth && height === lastHeight) return
+      lastWidth = width
+      lastHeight = height
+      // 尺寸变化不该补过渡动画，也不该打断正在进行的入场动画
+      chart?.resize({ animation: { duration: 0 } })
     })
     observer.observe(container.value)
   }

@@ -184,6 +184,11 @@ const trendOption = computed<EChartsOption>(() => {
         yAxisIndex: 0,
         areaStyle: { opacity: 0.12 },
         data: gmv,
+        // 入场动画：折线从左到右「画」出来（ECharts 的 line 入场本质是一次裁剪展开）。
+        // 比主题默认的 800ms 更长，配合下面的容器淡入，让「正在载入」这件事看得见。
+        animationDuration: 1400,
+        animationEasing: 'cubicOut',
+        animationDelay: 120,
       },
       {
         name: '订单量',
@@ -192,6 +197,11 @@ const trendOption = computed<EChartsOption>(() => {
         symbolSize: 6,
         yAxisIndex: 1,
         data: orderCount,
+        // 比成交额晚 320ms 出场，两条线形成先后绘制的层次，
+        // 否则它们完全同步展开，看起来像一次性弹出而不是「描」出来的
+        animationDuration: 1400,
+        animationEasing: 'cubicOut',
+        animationDelay: 440,
       },
     ],
   }
@@ -375,6 +385,7 @@ onMounted(fetchData)
         <EmptyState v-if="isEmptyTrend" :icon="DataLine" title="该时间段暂无订单" compact />
         <EChart
           v-else
+          class="trend-chart-enter"
           :option="trendOption"
           height="var(--chart-h-lg)"
           @legend-change="onTrendLegendChange"
@@ -512,6 +523,32 @@ onMounted(fetchData)
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+/* 趋势图入场：骨架屏切到图表的瞬间，容器淡入并轻微上移。
+   与系列上的绘制动画（折线从左到右）叠加，形成「先浮现、再描线」的两段节奏；
+   只在首次挂载时播放 —— 切换天数只更新 option，组件不重建，不会重复播放。 */
+.trend-chart-enter {
+  animation: trend-chart-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes trend-chart-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 无障碍：系统开启「减少动态效果」时不做位移与淡入（ECharts 的绘制动画由 EChart.vue 关闭） */
+@media (prefers-reduced-motion: reduce) {
+  .trend-chart-enter {
+    animation: none;
+  }
 }
 
 /* ---------- 移动端 ---------- */
