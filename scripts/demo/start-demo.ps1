@@ -524,7 +524,11 @@ function Start-Demo {
   Write-Ok '迁移已应用'
 
   Write-Step '检查演示数据'
-  $countScript = "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.product.count().then(c=>{console.log(c);return p.`$disconnect()}).catch(()=>{console.log('-1')})"
+  # 一次进程查两件事：商品总数 + 最新订单距今天数。
+  # 演示数据的时间戳是相对 seed 运行时刻生成的，若库里那份是很久以前灌的，
+  # 数据看板的「近 7 天」趋势就会变成空图（实测：10/22 灌的数据到 11/01 已空）。
+  # 因此不能只看「有没有商品」，还要看「数据新不新鲜」。
+  $countScript = "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();(async()=>{const c=await p.product.count();const o=await p.order.findFirst({orderBy:{createdAt:'desc'},select:{createdAt:true}});const d=o?Math.floor((Date.now()-o.createdAt.getTime())/86400000):9999;console.log(c+','+d);await p.`$disconnect()})().catch(()=>{console.log('-1,9999')})"
   Push-Location $serverDir
   try {
     $countResult = Invoke-Native -Exe $nodeExe -Arguments @('-e', $countScript)
@@ -532,12 +536,31 @@ function Start-Demo {
     Pop-Location
   }
   $productCount = -1
-  if ($countResult.ExitCode -eq 0 -and $countResult.Output.Trim() -match '^-?\d+$') {
-    $productCount = [int]$countResult.Output.Trim()
+  $orderStaleDays = 9999
+  if ($countResult.ExitCode -eq 0 -and $countResult.Output.Trim() -match '^(-?\d+),(\d+)$') {
+    $productCount = [int]$Matches[1]
+    $orderStaleDays = [int]$Matches[2]
   }
 
-  if ($Reseed -or $productCount -le 0) {
-    Write-Note '正在灌入演示数据（约 10 秒）...'
+  # 超过这个天数就自动重灌：既能救回过期数据，又不会因为演示中途跨天重启而意外丢数据
+  $maxOrderAgeDays = 2
+
+  # 决定是否需要灌数据，以及给出对应说明。三种触发原因，最终只调用一次 seed。
+  $seedNote = $null
+  $seedOkText = '演示数据准备完成'
+  if ($Reseed) {
+    $seedNote = '按 -Reseed 要求重建演示数据（约 10 秒）...'
+  } elseif ($productCount -le 0) {
+    $seedNote = '库中没有数据，正在灌入演示数据（约 10 秒）...'
+  } elseif ($orderStaleDays -gt $maxOrderAgeDays) {
+    # 数据过期：看板「近 7 天」会是空图，现场演示会很尴尬。自动重建，无需人工干预。
+    Write-Warn2 "演示数据已是 $orderStaleDays 天前的，看板「近 7 天」会空掉"
+    $seedNote = '正在按当前日期重建演示数据（约 10 秒）...'
+    $seedOkText = '演示数据已刷新到最近 30 天'
+  }
+
+  if ($seedNote) {
+    Write-Note $seedNote
     if (-not (Test-Path $tsxCli)) { throw "缺少 tsx：$tsxCli（node_modules 不完整？）" }
     Push-Location $serverDir
     try {
@@ -549,9 +572,9 @@ function Start-Demo {
       Write-Host $seedResult.Output -ForegroundColor DarkGray
       throw '灌入演示数据失败'
     }
-    Write-Ok '演示数据准备完成'
+    Write-Ok $seedOkText
   } else {
-    Write-Ok "已有 $productCount 件商品，跳过灌数据（需要重置请加 -Reseed）"
+    Write-Ok "已有 $productCount 件商品，数据是 ${orderStaleDays} 天内的，跳过灌数据（强制重建加 -Reseed）"
   }
 
   # ---------- 构建 ----------

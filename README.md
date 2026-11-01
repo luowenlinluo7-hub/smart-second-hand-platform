@@ -312,6 +312,11 @@ start-demo.bat -Rebuild        :: 强制重建前后端
 start-demo.bat -Reseed         :: 强制重灌演示数据
 ```
 
+> **演示数据会自动保鲜**：演示订单的时间戳是相对 `seed` 执行时刻生成的（覆盖近 30 天，
+> 供数据看板使用）。若库里那份是很久以前灌的，看板的「近 7 天」趋势会变成空图。
+> 因此启动时会检查**最新订单距今多少天**，超过 2 天就自动重建演示数据，
+> 答辩当天双击即可，不用记着手动重灌。想立刻重来一份用 `-Reseed`。
+
 ### 目标机器没有 Node / MySQL？先打包便携运行时
 
 在一台**已装 Node 和 MySQL 8** 的电脑上执行一次：
@@ -369,7 +374,7 @@ client/public/demo/     25 张商品图（已含在 dist 里）
 | 环境自检 | 优先用 `runtime/node.exe`，没有才回落到 PATH；检查 `node_modules`、`server/.env` |
 | 准备数据库 | 本机 3306 有 MySQL 时，先用 `server/.env` 的连接串**真连一次**；连上才复用，连不上（密码不匹配等）自动回退便携实例。没有 MySQL 时直接用随包（或已装）的 MySQL 二进制在本地起**便携实例**，无需管理员权限、无需 Docker 服务 |
 | 同步结构 | 用 node 直接执行 Prisma CLI（`node node_modules/prisma/build/index.js migrate deploy`），**不需要 npm/npx** |
-| 灌演示数据 | 库里没有商品时自动 `node node_modules/tsx/dist/cli.mjs prisma/seed.ts`（幂等） |
+| 灌演示数据 | 库里没有商品、或**数据已过期**时自动 `node node_modules/tsx/dist/cli.mjs prisma/seed.ts`（幂等）。过期判定：最新订单距今超过 2 天，避免数据看板的「近 7 天」趋势变空图 |
 | 构建 | `dist` 缺失时才构建；随包运行时的机器没有 npm，产物必须预先准备好 |
 | 启动 | 后端**同源托管**前端 `dist`，一个端口同时提供页面和 `/api`，没有跨域也没有反向代理 |
 | 强制离线 | `AI_MOCK=true` + 清空 Cloudinary 凭据 → AI 走本地规则、图片存本地磁盘，**全程零外网请求** |
