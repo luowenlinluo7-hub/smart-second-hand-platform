@@ -271,9 +271,10 @@ cd client && npm run dev
 ```
 
 > **数据库会自动准备**：无论你在**根目录**还是 **`server/` 目录**执行 `npm run dev`，
-> 都会先探测 3306 —— 有 MySQL 就用 `server/.env` 的配置；没有就自动起一个便携实例
+> 都会先探测 3306 —— 有 MySQL 就**先用 `server/.env` 的连接串真连一次**，连得上才复用；
+> 连不上（例如本机 MySQL 的 root 密码和 `.env` 不一致）会自动回退到便携实例
 > （与 `start-demo.bat` 共用同一份数据），连接串通过环境变量注入后端，**不会改你的 `.env`**。
-> 停掉便携实例：`node scripts/ensure-db.mjs stop`。
+> 没有 MySQL 时直接起便携实例。停掉便携实例：`node scripts/ensure-db.mjs stop`。
 
 打开 <http://localhost:5173>，用下面的演示账号登录。
 
@@ -366,7 +367,7 @@ client/public/demo/     25 张商品图（已含在 dist 里）
 | 步骤 | 说明 |
 | --- | --- |
 | 环境自检 | 优先用 `runtime/node.exe`，没有才回落到 PATH；检查 `node_modules`、`server/.env` |
-| 准备数据库 | 本机 3306 有 MySQL 就直接复用；没有就用随包（或已装）的 MySQL 二进制在本地起**便携实例**，无需管理员权限、无需 Docker 服务 |
+| 准备数据库 | 本机 3306 有 MySQL 时，先用 `server/.env` 的连接串**真连一次**；连上才复用，连不上（密码不匹配等）自动回退便携实例。没有 MySQL 时直接用随包（或已装）的 MySQL 二进制在本地起**便携实例**，无需管理员权限、无需 Docker 服务 |
 | 同步结构 | 用 node 直接执行 Prisma CLI（`node node_modules/prisma/build/index.js migrate deploy`），**不需要 npm/npx** |
 | 灌演示数据 | 库里没有商品时自动 `node node_modules/tsx/dist/cli.mjs prisma/seed.ts`（幂等） |
 | 构建 | `dist` 缺失时才构建；随包运行时的机器没有 npm，产物必须预先准备好 |
@@ -381,6 +382,23 @@ client/public/demo/     25 张商品图（已含在 dist 里）
 
 > 重复双击 `start-demo.bat` 不会重复启动：检测到已有实例时会提示「已在运行」并打开页面，
 > **不会动那套实例正在使用的数据库**，然后停在本窗口等你按任意键，方便看清提示。
+
+**如果看到「本机 MySQL 密码不匹配，正在自动切换至便携式数据库」**：
+
+这是**预期行为，不是错误** —— 说明你的电脑上装过 MySQL 且正在运行，但 `server/.env` 里的
+DATABASE_URL 密码和它不一致（重装过 MySQL、改过 root 密码都会这样）。
+脚本会继续用随包便携实例把演示跑起来，你**什么都不用改**。
+
+想让它重新用本机 MySQL（可选）：
+
+```powershell
+# 用你本机 MySQL 的真实 root 密码替换下面的 <密码>
+# 然后重新双击 start-demo.bat
+notepad server\.env      # 修改 DATABASE_URL="mysql://root:<密码>@localhost:3306/smart_second_hand"
+```
+
+> 注意：演示数据在便携库里（`%LOCALAPPDATA%\smart-second-hand-demo`）。
+> 切回本机 MySQL 后走的是另一套库，首次启动会自动迁移 + 灌 seed（数据量相同，但两套库互相独立）。
 
 **离线包完整性**（已验证）：
 

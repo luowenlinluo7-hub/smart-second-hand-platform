@@ -97,6 +97,33 @@ function Get-EnvValue {
   return $null
 }
 
+# 端口通 ≠ 凭据正确。本机 MySQL 在跑但 root 密码与 server/.env 不一致时，
+# 只测端口会一路跑到 migrate 才报 P1000。这里用 Prisma CLI 真连一次库。
+function Test-DatabaseUrl {
+  param(
+    [string]$Url,
+    [string]$NodeExe,
+    [string]$ServerDir,
+    [string]$PrismaCli
+  )
+  if (-not $Url) { return $false }
+  if (-not (Test-Path $PrismaCli)) { return $false }
+
+  $previous = $env:DATABASE_URL
+  $env:DATABASE_URL = $Url
+  Push-Location $ServerDir
+  try {
+    $null = 'SELECT 1;' | & $NodeExe $PrismaCli db execute --stdin --schema prisma/schema.prisma 2>&1
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  } finally {
+    Pop-Location
+    if ($null -eq $previous) { Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue }
+    else { $env:DATABASE_URL = $previous }
+  }
+}
+
 function Find-Mysqld {
   $cmd = Get-Command mysqld.exe -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
@@ -117,16 +144,23 @@ if ($Stop) {
   exit 0
 }
 
-# ---------- 1) 本机 3306 可用就直接用 ----------
+# ---------- 1) 本机 3306 可用就直接用（必须真连一次，端口通不代表密码对）----------
 if (Test-Port 3306) {
-  $url = Get-EnvValue -Path (Join-Path $serverDir '.env') -Key 'DATABASE_URL'
-  if ($url) {
+  $envPathFull = Join-Path $serverDir '.env'
+  $url = Get-EnvValue -Path $envPathFull -Key 'DATABASE_URL'
+  $probeNode = if (Test-Path $bundledNode) { $bundledNode } else { 'node' }
+  $probePrismaCli = Join-Path $serverDir 'node_modules\prisma\build\index.js'
+  if ($url -and (Test-DatabaseUrl -Url $url -NodeExe $probeNode -ServerDir $serverDir -PrismaCli $probePrismaCli)) {
     Write-Output "DATABASE_URL=$url"
     Write-Output 'MYSQLD_STARTED=0'
     exit 0
   }
-  Write-Output 'ERROR=server/.env 中缺少 DATABASE_URL'
-  exit 1
+  if (-not $url) {
+    Write-Output 'ERROR=server/.env 中缺少 DATABASE_URL'
+    exit 1
+  }
+  # 密码不匹配时不要直接失败：继续往下走，回退到便携实例
+  Write-Output 'INFO=本机 MySQL 密码不匹配，正在自动切换至便携式数据库'
 }
 
 # ---------- 2) 起便携实例 ----------

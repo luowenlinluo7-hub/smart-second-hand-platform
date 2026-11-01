@@ -181,6 +181,36 @@ function Get-EnvValue {
   return $null
 }
 
+# 端口通 ≠ 凭据正确。本机 MySQL 在跑、但 root 密码与 server/.env 不一致时
+# （重装 MySQL、别人改过密码、机房电脑都可能），只测端口会让流程跑到 migrate
+# 阶段才报 P1000，用户看到的就是「启动失败」。这里用 Prisma CLI 真连一次库，
+# 与后续 migrate 走同一条链路，结论最可靠。
+function Test-DatabaseUrl {
+  param(
+    [string]$Url,
+    [string]$NodeExe,
+    [string]$ServerDir,
+    [string]$PrismaCli
+  )
+  if (-not $Url) { return $false }
+  if (-not (Test-Path $PrismaCli)) { return $false }
+
+  $previous = $env:DATABASE_URL
+  $env:DATABASE_URL = $Url
+  Push-Location $ServerDir
+  try {
+    # db execute 只连库执行一句 SQL，不动表结构，适合当连通性探针
+    $null = 'SELECT 1;' | & $NodeExe $PrismaCli db execute --stdin --schema prisma/schema.prisma 2>&1
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  } finally {
+    Pop-Location
+    if ($null -eq $previous) { Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue }
+    else { $env:DATABASE_URL = $previous }
+  }
+}
+
 # 找 mysqld.exe：先看 PATH，再扫 Program Files
 function Find-Mysqld {
   $cmd = Get-Command mysqld.exe -ErrorAction SilentlyContinue
@@ -318,12 +348,30 @@ function Start-Demo {
   $dbPort = 0
 
   if (Test-Port 3306) {
-    Write-Step '复用本机 MySQL（3306）'
-    $dbUrl = Get-EnvValue -Path $envPath -Key 'DATABASE_URL'
-    if (-not $dbUrl) { throw 'server/.env 中缺少 DATABASE_URL' }
-    Write-Ok '已连接本机 MySQL 服务'
-  } else {
-    Write-Step '本机 MySQL 服务未运行，改用项目内便携实例（不需要管理员权限）'
+    # 端口通不代表能用：必须真连一次，否则密码不对会在 migrate 阶段才炸
+    $envUrl = Get-EnvValue -Path $envPath -Key 'DATABASE_URL'
+    $probePrismaCli = Join-Path $serverDir 'node_modules\prisma\build\index.js'
+    if ($envUrl -and (Test-DatabaseUrl -Url $envUrl -NodeExe $nodeExe -ServerDir $serverDir -PrismaCli $probePrismaCli)) {
+      Write-Step '复用本机 MySQL（3306）'
+      $dbUrl = $envUrl
+      Write-Ok '已连接本机 MySQL 服务'
+    } else {
+      Write-Warn2 '本机 MySQL 密码不匹配，正在自动切换至便携式数据库'
+      if ($envUrl) {
+        Write-Note '要继续用本机 MySQL，请修正 server/.env 里的 DATABASE_URL'
+      } else {
+        Write-Note 'server/.env 缺少 DATABASE_URL'
+      }
+    }
+  }
+
+  # 本机连不上时不能让演示卡住：直接回退到随包便携实例，机房电脑也能一键起来
+  if (-not $dbUrl) {
+    if (Test-Port 3306) {
+      Write-Step '启动项目内便携实例（端口 3307，不需要管理员权限）'
+    } else {
+      Write-Step '本机 MySQL 服务未运行，改用项目内便携实例（不需要管理员权限）'
+    }
     Write-Note "数据目录：$demoData"
 
     $mysqldExe = $null
