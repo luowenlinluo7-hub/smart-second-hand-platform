@@ -66,7 +66,14 @@ const firstImage = (images: Prisma.JsonValue): string | null => {
   return typeof first === 'string' ? first : null;
 };
 
-// 下单：按卖家拆单，事务内保证「校验 → 建单 → 扣商品状态」原子性
+// 并发抢购同一件商品时，InnoDB 会因行锁竞争抛 P2034（写冲突 / 死锁）。
+// 该错误意味着事务已整体回滚、没有任何写入生效，因此重试是安全的。
+// 自动重试把「运气不好」的失败转成成功，用户不必手动刷新页面。
+const MAX_TX_ATTEMPTS = 3;
+const isRetryableConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
+// 下单：按卖家拆单，事务内保证「校验 → 建单 → 扣库存」原子性
 export const createOrder = async (
   buyerId: string,
   input: CreateOrderInput,
@@ -79,7 +86,28 @@ export const createOrder = async (
   // 按 id 排序后加锁：并发下单同一批商品时保持一致的加锁顺序，降低死锁概率
   const productIds = [...merged.keys()].sort();
 
-  return prisma.$transaction(async (tx) => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await createOrderInTransaction(buyerId, input, merged, productIds);
+    } catch (error) {
+      if (attempt < MAX_TX_ATTEMPTS && isRetryableConflict(error)) {
+        // 退避递增，避免多个失败事务同时重试再次撞在一起
+        await new Promise((resolve) => setTimeout(resolve, 15 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+// 下单事务主体：校验商品 → 按卖家拆单 → 扣减库存 → 售罄商品转已售出
+const createOrderInTransaction = (
+  buyerId: string,
+  input: CreateOrderInput,
+  merged: Map<string, number>,
+  productIds: string[],
+): Promise<OrderDTO[]> =>
+  prisma.$transaction(async (tx) => {
     const products = await tx.product.findMany({
       where: { id: { in: productIds } },
       select: {
@@ -154,21 +182,43 @@ export const createOrder = async (
       created.push(formatOrder(order));
     }
 
-    // 扣减商品状态：二手商品默认单件，下单后置 SOLD。
-    // 关键：where 里带上 status: 'ON_SALE'，把「仍在售」作为更新的前置条件，
-    // 用受影响行数做乐观锁。并发两人同时下单同一件商品时，后到的事务
-    // 重新匹配条件会得到 count=0，从而整体回滚，避免一物多卖。
-    const claimed = await tx.product.updateMany({
-      where: { id: { in: productIds }, status: 'ON_SALE' },
-      data: { status: 'SOLD' },
+    // 扣减库存：按购买的件数原子扣减，用「仍是 ON_SALE 且库存够」作为乐观锁条件。
+    // 必须逐商品执行：每件商品要扣的数量不同（quantity 可能大于 1）。
+    // 遍历顺序沿用排序后的 productIds，与前面加锁顺序一致，减少死锁。
+    //
+    // ⚠️ 这里只能用 updateMany，不能用 update（即便 where 里能写非唯一条件）：
+    // update 的附加条件只在「查找」阶段生效，最终 UPDATE 语句仍按 id 定位，
+    // 两个并发事务会同时看到旧库存并各扣一次 —— 实测 stock=1 时能卖出 2 单。
+    // updateMany 会把条件编进 UPDATE ... WHERE，配合受影响行数才是真正的原子乐观锁。
+    const titleById = new Map(products.map((p) => [p.id, p.title]));
+    for (const productId of productIds) {
+      const quantity = merged.get(productId) ?? 1;
+      const dec = await tx.product.updateMany({
+        where: { id: productId, status: 'ON_SALE', stock: { gte: quantity } },
+        data: { stock: { decrement: quantity } },
+      });
+      if (dec.count !== 1) {
+        throw ApiError.conflict(
+          `商品「${titleById.get(productId) ?? productId}」库存不足或已被他人购买，请刷新后重试`,
+        );
+      }
+    }
+
+    // 只有库存归零的商品才转为已售出；仍有余量的继续在售 —— 这是「多件库存」与
+    // 「单件二手商品」的统一语义：单件商品扣完即为 0，自然变成 SOLD。
+    const soldOut = await tx.product.findMany({
+      where: { id: { in: productIds }, stock: { lte: 0 } },
+      select: { id: true },
     });
-    if (claimed.count !== productIds.length) {
-      throw ApiError.conflict('商品已被他人购买，请刷新后重试');
+    if (soldOut.length > 0) {
+      await tx.product.updateMany({
+        where: { id: { in: soldOut.map((p) => p.id) } },
+        data: { status: 'SOLD' },
+      });
     }
 
     return created;
   });
-};
 
 // 买家 / 卖家订单列表（复用同一查询，仅过滤字段不同）
 const listOrders = async (
@@ -270,12 +320,23 @@ export const updateOrderStatus = async (
       include: orderInclude,
     });
 
-    // 取消订单：商品回滚为在售，避免商品被永久锁死。
-    // 加了 status: 'SOLD' 窄条件 —— 只回收「因本单被占用」的商品，
-    // 不覆盖卖家自己下架（OFF_SHELF）或审核中（PENDING_REVIEW）的状态。
+    // 取消订单：库存回补 + 商品回滚为在售，避免商品被永久锁死。
+    // 先按明细恢复库存（当初下单扣了多少就补回多少），再把「因本单售罄」的商品
+    // 重新上架。只回收状态确实是 SOLD 的商品 —— 不覆盖卖家自己下架（OFF_SHELF）
+    // 或审核中（PENDING_REVIEW）的状态。
     if (targetStatus === 'CANCELLED') {
+      for (const item of result.items) {
+        await tx.product.updateMany({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
       await tx.product.updateMany({
-        where: { id: { in: result.items.map((i) => i.productId) }, status: 'SOLD' },
+        where: {
+          id: { in: result.items.map((i) => i.productId) },
+          status: 'SOLD',
+          stock: { gt: 0 },
+        },
         data: { status: 'ON_SALE' },
       });
     }

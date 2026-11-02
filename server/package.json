@@ -12,6 +12,7 @@
     "seed": "prisma db seed",
     "db:clean-e2e": "tsx prisma/clean-test-data.ts",
     "db:reset-demo": "npm run db:clean-e2e -- --yes && npm run seed",
+    "db:fix-sold-stock": "tsx prisma/fix-sold-stock.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
