@@ -34,6 +34,10 @@ const form = reactive({
   stock: 1,
 })
 
+// 编辑页加载时的库存原值：用于判断用户是否真的改了库存，
+// 以及作为后端乐观锁的期望值（期间有人下单则保存会被拒绝）
+const loadedStock = ref(0)
+
 // 图片：URL 数组 + el-upload 的 file-list
 const images = ref<string[]>([])
 const fileList = ref<UploadFile[]>([])
@@ -84,14 +88,20 @@ const onSubmit = async (): Promise<void> => {
       images: images.value,
       condition: form.condition,
       categoryId: form.categoryId,
-      stock: form.stock,
+      // 发布时才带 stock。编辑时不无条件回传：库存可能已被订单扣减，
+      // 传旧值会把它覆盖回去。只有用户确实改了库存才提交，并带上原值做乐观锁。
+      ...(isEdit
+        ? form.stock !== loadedStock.value
+          ? { stock: form.stock, expectedStock: loadedStock.value }
+          : {}
+        : { stock: form.stock }),
     }
 
     if (isEdit) {
       await updateProduct(editId, payload)
       ElMessage.success('更新成功')
     } else {
-      await createProduct(payload)
+      await createProduct(payload as Parameters<typeof createProduct>[0])
       ElMessage.success('发布成功')
     }
     router.push('/')
@@ -100,7 +110,7 @@ const onSubmit = async (): Promise<void> => {
   } finally {
     submitting.value = false
   }
-}
+};
 
 onMounted(async () => {
   try {
@@ -120,6 +130,7 @@ onMounted(async () => {
       form.condition = p.condition
       form.categoryId = p.categoryId
       form.stock = p.stock
+      loadedStock.value = p.stock
       images.value = [...p.images]
       fileList.value = p.images.map((url, i) => ({ name: `图${i + 1}`, url, status: 'success' as const, uid: i }))
     } catch (error) {

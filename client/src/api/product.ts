@@ -22,6 +22,8 @@ export const createProduct = (data: {
 }) => http.post<Product>('/products', data)
 
 // 编辑商品
+// expectedStock：编辑页加载时的库存原值，后端据此做乐观锁；
+// 不传则代表「不修改库存」，可避免把期间订单扣减的库存覆盖回旧值。
 export const updateProduct = (
   id: string,
   data: {
@@ -33,6 +35,7 @@ export const updateProduct = (
     condition?: string
     categoryId?: string
     stock?: number
+    expectedStock?: number
   },
 ) => http.put<Product>(`/products/${id}`, data)
 

@@ -237,6 +237,98 @@ const run = async () => {
     }
   });
 
+  // ---------- 多库存扣减与编辑乐观锁 ----------
+  // 二手商品多为单件，但卖家可设多件库存：买走一件只减库存、商品继续在售，
+  // 扣到 0 才转已售出。编辑商品时若库存已被订单扣减，旧值不允许覆盖回去。
+  // 放在「取消订单」段之前：那一段在缺少商品时会提前 return，会把后面的用例跳过。
+  const STOCK_IMAGE = '/demo/p1.jpg';
+  const publishWithStock = async (title, price, stock) => {
+    const res = await api.post('/api/products', {
+      token: context.tokens.temp,
+      body: {
+        title,
+        description: `E2E 库存用例 ${context.runId}`,
+        price,
+        images: [STOCK_IMAGE],
+        condition: 'GOOD',
+        categoryId: context.categoryId,
+        stock,
+      },
+    });
+    assert.biz(res, 0, 201, `发布多库存商品「${title}」`);
+    const id = res.body.data.id;
+    context.track('product', id);
+
+    const audited = await api.patch(`/api/admin/products/${id}/audit`, {
+      token: context.tokens.admin,
+      body: { approve: true },
+    });
+    assert.biz(audited, 0, 200, '审核多库存商品');
+    return id;
+  };
+
+  await test('多库存商品卖出 1 件后库存递减且仍在售，售罄才转已售出', async () => {
+    const id = await publishWithStock('E2E 多库存商品', 100, 3);
+
+    const first = await place(buyer, id);
+    assert.biz(first, 0, 201, '多库存商品首次下单');
+    context.track('order', first.body.data[0].id);
+
+    const afterFirst = await api.get(`/api/products/${id}`);
+    assert.equal(afterFirst.body.data.stock, 2, '首次下单后库存');
+    assert.equal(afterFirst.body.data.status, 'ON_SALE', '仍有库存应继续在售');
+
+    const list = await api.get('/api/products?pageSize=100');
+    const found = (list.body.data.list || []).find((p) => p.id === id);
+    assert.ok(found, '仍有库存的商品应出现在公开列表');
+
+    const second = await place(buyer2, id);
+    assert.biz(second, 0, 201, '第二次下单');
+    context.track('order', second.body.data[0].id);
+
+    const third = await place(buyer, id);
+    assert.biz(third, 0, 201, '第三次下单');
+    context.track('order', third.body.data[0].id);
+
+    const soldOut = await api.get(`/api/products/${id}`);
+    assert.equal(soldOut.body.data.stock, 0, '售罄后库存');
+    assert.equal(soldOut.body.data.status, 'SOLD', '售罄后状态');
+
+    const over = await place(buyer2, id);
+    assert.biz(over, codes.CONFLICT, 409, '售罄后继续下单');
+  });
+
+  await test('编辑商品携带陈旧库存期望值时返回 409，且不覆盖订单扣减', async () => {
+    const id = await publishWithStock('E2E 库存乐观锁商品', 100, 4);
+
+    const before = await api.get(`/api/products/${id}`);
+    assert.equal(before.body.data.stock, 4, '初始库存');
+
+    // 编辑页打开期间有人下单，库存 4 → 3
+    const order = await place(buyer, id);
+    assert.biz(order, 0, 201, '乐观锁场景下单');
+    context.track('order', order.body.data[0].id);
+
+    const stale = await api.put(`/api/products/${id}`, {
+      token: context.tokens.temp,
+      body: { title: 'E2E 库存乐观锁商品(改名)', stock: 10, expectedStock: 4 },
+    });
+    assert.biz(stale, codes.CONFLICT, 409, '携带陈旧期望值编辑');
+
+    const afterReject = await api.get(`/api/products/${id}`);
+    assert.equal(afterReject.body.data.stock, 3, '被拒绝后库存不应被覆盖');
+
+    // 只改标题、不传 stock：不应影响库存
+    const rename = await api.put(`/api/products/${id}`, {
+      token: context.tokens.temp,
+      body: { title: 'E2E 库存乐观锁商品(仅改名)' },
+    });
+    assert.biz(rename, 0, 200, '仅改标题');
+
+    const afterRename = await api.get(`/api/products/${id}`);
+    assert.equal(afterRename.body.data.stock, 3, '仅改标题不应影响库存');
+  });
+
   // ---------- 取消订单回滚商品（闭环）----------
   if (!cancelProductId) {
     skip('取消订单回滚商品', '未取到用于取消场景的商品');
@@ -261,6 +353,7 @@ const run = async () => {
     const detail = await api.get(`/api/products/${cancelProductId}`);
     assert.equal(detail.body.data.status, 'ON_SALE', '取消后商品状态');
   });
+
 };
 
 module.exports = { run };

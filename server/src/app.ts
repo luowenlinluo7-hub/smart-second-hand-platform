@@ -143,6 +143,17 @@ export const createApp = (): Express => {
   }
 
   // 所有业务接口统一挂载在 /api 前缀下
+  //
+  // 缓存策略：接口返回的是库存、订单状态这类强一致数据，绝不能被任何中间层缓存。
+  // 不设 Cache-Control 时，Express 仍会加 ETag，cpolar 边缘节点、校园网透明代理、
+  // 浏览器启发式缓存都可能据此返回下单前的旧 JSON（表现为「买完库存没变」）。
+  // 这里统一 no-store；SSE 的 /api/ai/chat 会在自己的控制器里覆盖成
+  // no-cache, no-transform（no-transform 必须保留，否则中间层会压缩攒批）。
+  // 前端静态资源（/assets/*）不走这个中间件，长缓存策略不受影响。
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.use('/api', apiRouter);
 
   // 生产 / 答辩演示：后端同源托管前端构建产物

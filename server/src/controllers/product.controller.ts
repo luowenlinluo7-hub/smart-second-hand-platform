@@ -44,6 +44,9 @@ const productUpdateSchema = z.object({
   condition: z.enum(['NEW', 'LIKE_NEW', 'GOOD', 'FAIR']).optional(),
   categoryId: z.string().min(1, '请选择分类').optional(),
   stock: z.number().int().min(1, '库存至少 1').max(999, '库存最多 999').optional(),
+  // 乐观锁：编辑页加载时的库存原值。带上它才能安全修改库存 ——
+  // 若期间有买家下单导致实际库存已变，写入会被拒绝，避免把已扣减的库存覆盖回旧值。
+  expectedStock: z.number().int().min(0, '期望库存不能为负').optional(),
 });
 
 const listQuerySchema = z.object({
@@ -137,6 +140,7 @@ export const update = async (req: Request, res: Response): Promise<void> => {
     condition: input.condition,
     categoryId: input.categoryId,
     stock: input.stock,
+    expectedStock: input.expectedStock,
   });
   res.json(success(product, '更新成功'));
 };

@@ -77,6 +77,8 @@ export interface ProductUpdateInput {
   condition?: ProductCondition;
   categoryId?: string;
   stock?: number;
+  // 编辑页加载时的库存原值，用于乐观锁；带 stock 修改时应一并提供
+  expectedStock?: number;
 }
 
 // 金额出参统一 toFixed(2)，避免 Decimal 序列化时尾随零丢失
@@ -349,12 +351,32 @@ export const updateProduct = async (
     throw ApiError.conflict('商品正在审核中，请等待审核结果');
   }
 
-  const product = await prisma.product.update({
-    where: { id },
-    data: input,
-    include: productInclude,
+  const { expectedStock, stock, ...rest } = input;
+
+  return prisma.$transaction(async (tx) => {
+    // 库存单独处理：编辑页从打开到保存之间可能有人下单扣减库存，
+    // 若把表单里的旧值整体写回，就会把已扣减的库存「恢复」成旧值（丢失更新，超卖风险）。
+    // 因此带 expectedStock 时用 updateMany 做乐观锁，以「当前库存仍等于加载时的值」为条件。
+    if (stock !== undefined) {
+      const claimed = await tx.product.updateMany({
+        where:
+          expectedStock === undefined
+            ? { id }
+            : { id, stock: expectedStock },
+        data: { stock },
+      });
+      if (claimed.count !== 1) {
+        throw ApiError.conflict('库存在编辑期间已被订单变更，请刷新后重新修改');
+      }
+    }
+
+    const product = await tx.product.update({
+      where: { id },
+      data: rest,
+      include: productInclude,
+    });
+    return formatProduct(product);
   });
-  return formatProduct(product);
 };
 
 // 下架：软删，置 OFF_SHELF；仅商品归属者可操作
