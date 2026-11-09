@@ -32,3 +32,12 @@ server/uploads/
 
 # 离线演示的便携运行时（node.exe + 精简 MySQL，约 183 MB，由 prepare-runtime.ps1 生成）
 runtime/
+
+# 答辩/演示的本机私有配置（含固定公网地址，勿公开）
+demo-config.local.bat
+
+# 答辩二维码：内容为固定公网地址，仅本机/PPT 使用
+docs/defense-qrcode.png
+
+# AI 协作工作记忆，不属于项目代码
+.workbuddy/
