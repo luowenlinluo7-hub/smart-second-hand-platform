@@ -473,7 +473,10 @@ const streamReply = async (
 
   if (env.AI_MOCK) {
     await emitLocalReply(localReply, sink, signal);
-    return { source: 'mock', degraded: '当前为本地规则模式（AI_MOCK=true），回答由本地话术生成' };
+    return {
+      source: 'mock',
+      degraded: '当前离线演示模式，使用本地规则解析，回答由本地话术生成',
+    };
   }
   if (!env.DEEPSEEK_API_KEY) {
     await emitLocalReply(localReply, sink, signal);

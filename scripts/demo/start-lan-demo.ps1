@@ -9,7 +9,8 @@
     2. 放行单个 TCP 端口（默认 Domain/Private，校园网可加 -AllowPublic）
     3. 按默认路由网卡枚举局域网 IPv4，输出 http://<IP>:<Port>
     4. 可选启动 cpolar / natapp 国内节点隧道，得到 https 公网地址（备用链接）
-    5. 启动原有离线演示服务：单端口同源、AI_MOCK=true、本地图片、便携 MySQL
+    5. 启动原有离线演示服务：单端口同源、本地图片、便携 MySQL；
+     AI 默认走本地规则，加 -RealAI 则用真实大模型（失败自动降级）
     6. -Cleanup 在答辩后删除本脚本创建的防火墙规则
 
   主链路（本机 localhost / 局域网）完全离线，公网链接只是备用，
@@ -64,7 +65,8 @@ param(
   [switch]$DryRun,
   [switch]$NoBrowser,
   [switch]$Rebuild,
-  [switch]$Reseed
+  [switch]$Reseed,
+  [switch]$RealAI
 )
 
 # 不设 Stop：本脚本调用原生 exe，PS 5.1 下 Stop 会把原生 stderr 当成终止错误。
@@ -193,6 +195,7 @@ function Invoke-ElevatedRelaunch {
   if ($NoBrowser)   { $argStr += ' -NoBrowser' }
   if ($Rebuild)     { $argStr += ' -Rebuild' }
   if ($Reseed)      { $argStr += ' -Reseed' }
+  if ($RealAI)      { $argStr += ' -RealAI' }
   Write-Host ' '
   Write-Host '  需要管理员权限来创建防火墙规则，正在打开新的提权窗口……' -ForegroundColor Yellow
   Write-Host '  请在新窗口中继续；本窗口可以直接关闭。' -ForegroundColor DarkGray
@@ -377,7 +380,8 @@ if ($publicUrl) {
 Write-Host '   演示账号：   admin@example.com / Admin@123456（管理员）' -ForegroundColor Gray
 Write-Host '                seller_li@example.com / Seller@123456（卖家）' -ForegroundColor Gray
 Write-Host '                zhang@example.com / User@123456（买家）' -ForegroundColor Gray
-Write-Host '   AI 模式：    本地规则（AI_MOCK=true），断网可用、不消耗额度' -ForegroundColor Gray
+$lanAiMode = if ($RealAI) { '真实大模型（失败自动降级）' } else { '本地规则，断网可用、不消耗额度' }
+Write-Host "   AI 模式：    $lanAiMode" -ForegroundColor Gray
 Write-Host '  ------------------------------------------------------------' -ForegroundColor Yellow
 Write-Note '公网链接仅作备用：依赖笔记本在线、教室出口网与服务商节点，不要作为唯一演示手段。'
 Write-Note '手机/同学设备需与本机连同一 WiFi；校园网若有 AP 隔离，改用手机热点。'
@@ -399,7 +403,7 @@ if ($DryRun) {
 # 隧道已先行启动；本地端口此刻尚未监听，客户端会在服务就绪后自动恢复转发。
 Write-Step '启动离线演示服务'
 try {
-  & $demoScript -Port $Port -NoBrowser:$NoBrowser -Rebuild:$Rebuild -Reseed:$Reseed
+  & $demoScript -Port $Port -NoBrowser:$NoBrowser -Rebuild:$Rebuild -Reseed:$Reseed -RealAI:$RealAI
 } finally {
   if ($tunnelProc -and -not $tunnelProc.HasExited) {
     Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue

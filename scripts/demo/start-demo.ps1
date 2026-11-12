@@ -13,7 +13,8 @@
     2. 执行 Prisma 迁移；数据库为空时自动灌入演示数据（seed 本身幂等）
     3. 缺失时构建前端 dist 与后端 dist
     4. 后端同源托管前端 dist：一个端口同时提供页面与 /api，无跨域、无代理
-    5. 强制 AI_MOCK=true、清空 Cloudinary 凭据 → 全程零外网请求
+    5. 默认强制 AI_MOCK=true、清空 Cloudinary 凭据 → 全程零外网请求；
+       加 -RealAI 则改用真实大模型（需要网络，失败会自动降级为本地规则）
 
 .PARAMETER Port
   页面与接口共用端口，默认 3000
@@ -26,13 +27,19 @@
 
 .PARAMETER NoBrowser
   不自动打开浏览器
+
+.PARAMETER RealAI
+  使用真实大模型（DeepSeek）而不是本地规则。
+  需要 server/.env 里配好 DEEPSEEK_API_KEY 且有可用网络；
+  模型超时 / 限流 / 断网时会自动降级为本地规则，功能不中断。
 #>
 [CmdletBinding()]
 param(
   [int]$Port = 3000,
   [switch]$Rebuild,
   [switch]$Reseed,
-  [switch]$NoBrowser
+  [switch]$NoBrowser,
+  [switch]$RealAI
 )
 
 # 注意：不设 Stop。本脚本大量调用原生 exe，PS 5.1 下 Stop 会把原生命令的
@@ -606,8 +613,15 @@ function Start-Demo {
   # ---------- 启动 ----------
   Write-Step '启动服务'
 
-  # 强制离线：本地规则 AI + 本地磁盘存图
-  $env:AI_MOCK = 'true'
+  # AI 模式：默认离线本地规则；-RealAI 时交给 server/.env 决定（有 Key 就走真实模型，
+  # 失败仍会自动降级）。两种模式都强制用本地磁盘存图，避免境外图床裂图。
+  if ($RealAI) {
+    # 清掉可能残留的 AI_MOCK，让 .env 里的配置生效（.env 未写 AI_MOCK 时默认 false）
+    [Environment]::SetEnvironmentVariable('AI_MOCK', $null, 'Process')
+    Remove-Item Env:AI_MOCK -ErrorAction SilentlyContinue
+  } else {
+    $env:AI_MOCK = 'true'
+  }
   $env:CLOUDINARY_CLOUD_NAME = ''
   $env:CLOUDINARY_API_KEY = ''
   $env:CLOUDINARY_API_SECRET = ''
@@ -646,7 +660,12 @@ function Start-Demo {
   Write-Host '     admin      / Admin@123456    管理员（看板、审核）' -ForegroundColor Gray
   Write-Host '     seller_li  / Seller@123456   卖家' -ForegroundColor Gray
   Write-Host '     user_zhang / User@123456     买家' -ForegroundColor Gray
-  Write-Host '   AI：本地规则模式（AI_MOCK=true），断网可用' -ForegroundColor Gray
+  $aiModeText = if ($RealAI) {
+    'AI：真实大模型（失败自动降级为本地规则）'
+  } else {
+    'AI：本地规则模式，断网可用'
+  }
+  Write-Host "   $aiModeText" -ForegroundColor Gray
   Write-Host '   停止：在本窗口按 Ctrl+C，或直接关闭窗口' -ForegroundColor Gray
   Write-Host '  ------------------------------------------------' -ForegroundColor Yellow
   Write-Host ''
